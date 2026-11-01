@@ -68,14 +68,16 @@ export function SearchPage() {
       <PageHeader title="סימון תלמיד" lede="מחפשים לפי שם או כיתה, בוחרים סיבה ומשך, ולוחצים סמן להשארות." />
       {flash ? <Banner>{flash}</Banner> : null}
       {error ? <Banner tone="danger">{error}</Banner> : null}
-      <input
-        type="search"
-        autoFocus
-        placeholder="שם תלמיד או כיתה"
-        value={query}
-        aria-label="חיפוש תלמיד"
-        onChange={(event) => setQuery(event.target.value)}
-      />
+      <div className="sticky-search">
+        <input
+          type="search"
+          autoFocus
+          placeholder="שם תלמיד או כיתה"
+          value={query}
+          aria-label="חיפוש תלמיד"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </div>
       <div className="chips">
         <button type="button" className="chip" aria-pressed={classId === ""} onClick={() => setClassId("")}>
           כל הכיתות

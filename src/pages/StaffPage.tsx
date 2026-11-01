@@ -4,19 +4,22 @@ import type { ClassRoom, Profile, Role } from "../api/types";
 import { ROLE_LABEL } from "../api/types";
 import { useAuth } from "../auth";
 import { EmptyState, PageHeader } from "../components/PageHeader";
-import { Banner, Button } from "../components/ui";
+import { Sheet } from "../components/Sheet";
+import { Banner, Button, Field } from "../components/ui";
 
 const STAFF_ROLES: Array<Role | ""> = ["", "teacher", "homeroom", "secretary"];
 
 export function StaffPage() {
   const { session } = useAuth();
   const isAdmin = session?.profile.role === "admin";
+  const canEdit = isAdmin || session?.profile.role === "secretary";
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [query, setQuery] = useState("");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { role: Role | ""; classId: string }>>({});
 
   async function load() {
@@ -76,18 +79,40 @@ export function StaffPage() {
       <PageHeader
         title="צוות"
         lede={
-          isAdmin
-            ? "נותנים תפקיד לכל מי שנכנס עם גוגל, ומשייכים מחנך לכיתה."
-            : "משייכים מורים, מחנכים ומזכירות. אי אפשר לשנות תפקיד של מנהל."
+          !canEdit
+            ? "רשימת הצוות של בית הספר. שינוי תפקיד נעשה במזכירות."
+            : isAdmin
+              ? "נותנים תפקיד לכל מי שנכנס עם גוגל, ומשייכים מחנך לכיתה."
+              : "משייכים מורים, מחנכים ומזכירות. אי אפשר לשנות תפקיד של מנהל."
         }
       />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
-      <input value={query} placeholder="חיפוש לפי שם או מייל" onChange={(event) => setQuery(event.target.value)} />
+      <div className="sticky-search">
+        <input value={query} placeholder="חיפוש לפי שם או מייל" onChange={(event) => setQuery(event.target.value)} />
+      </div>
       {profiles.length <= 1 ? (
         <EmptyState title="עדיין רק אתם ברשימה" detail="ברגע שמורה נכנס עם חשבון גוגל, הוא מופיע כאן ומחכים שתתנו לו תפקיד." />
       ) : (
-        <div className="table-scroll">
+        <>
+        <div className="phone-only list">
+          {rows.map((profile) => {
+            const room = classes.find((item) => item.homeroomTeacherId === profile.id);
+            return (
+              <button key={profile.id} type="button" className="person-card" onClick={() => setOpenId(profile.id)}>
+                <span>
+                  <b>{profile.fullName || profile.email}</b>
+                  <span className="muted">
+                    {profile.role ? ROLE_LABEL[profile.role] : "ממתין לאישור"}
+                    {room ? ` · ${room.name}` : ""}
+                  </span>
+                </span>
+                <span className="badge">{profile.phone ? "יש טלפון" : "אין טלפון"}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="table-scroll desktop-only">
           <table className="data-table">
             <thead>
               <tr>
@@ -104,7 +129,7 @@ export function StaffPage() {
             </thead>
             <tbody>
               {rows.map((profile) => {
-                const locked = !isAdmin && profile.role === "admin";
+                const locked = !canEdit || (!isAdmin && profile.role === "admin");
                 const draft = draftFor(profile);
                 const options = isAdmin ? ([...STAFF_ROLES, "admin"] as Array<Role | "">) : STAFF_ROLES;
                 return (
@@ -170,7 +195,79 @@ export function StaffPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
+      {openId
+        ? rows
+            .filter((profile) => profile.id === openId)
+            .map((profile) => {
+              const locked = !canEdit || (!isAdmin && profile.role === "admin");
+              const draft = draftFor(profile);
+              const options = isAdmin ? ([...STAFF_ROLES, "admin"] as Array<Role | "">) : STAFF_ROLES;
+              return (
+                <Sheet key={profile.id} full title="איש צוות" onClose={() => setOpenId(null)}>
+                  <div className="stack">
+                    <p>
+                      <strong>{profile.fullName || "—"}</strong>
+                      <br />
+                      <span className="ltr muted">{profile.email}</span>
+                    </p>
+                    {locked ? (
+                      <p>{canEdit ? `תפקיד: ${ROLE_LABEL.admin}. רק מנהל יכול לשנות אותו.` : `תפקיד: ${profile.role ? ROLE_LABEL[profile.role] : "ממתין לאישור"}. שינוי תפקיד נעשה במזכירות.`}</p>
+                    ) : (
+                      <>
+                        <Field label="תפקיד">
+                          <select
+                            value={draft.role}
+                            onChange={(event) =>
+                              setDrafts((current) => ({
+                                ...current,
+                                [profile.id]: { ...draft, role: event.target.value as Role | "" },
+                              }))
+                            }
+                          >
+                            <option value="">ממתין לאישור</option>
+                            {options.filter(Boolean).map((item) => (
+                              <option key={item} value={item}>
+                                {ROLE_LABEL[item as Role]}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        {draft.role === "homeroom" ? (
+                          <Field label="כיתת חינוך">
+                            <select
+                              value={draft.classId}
+                              onChange={(event) =>
+                                setDrafts((current) => ({
+                                  ...current,
+                                  [profile.id]: { ...draft, classId: event.target.value },
+                                }))
+                              }
+                            >
+                              <option value="">בחרו כיתה</option>
+                              {classes.map((room) => (
+                                <option key={room.id} value={room.id}>
+                                  {room.name}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                        ) : null}
+                        <Button
+                          onClick={() =>
+                            void save(profile).then(() => setOpenId(null))
+                          }
+                        >
+                          שמירה
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </Sheet>
+              );
+            })
+        : null}
     </div>
   );
 }

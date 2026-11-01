@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getApi } from "../api";
 import type { Detention } from "../api/types";
 import { useAuth } from "../auth";
+import { PageHeader } from "../components/PageHeader";
 import { Banner, Button, Empty, Ltr, StatusPill, studentName } from "../components/ui";
 import { formatTime, jerusalemToday } from "../lib/dates";
 
@@ -32,7 +33,7 @@ export function MyMarksPage() {
 
   return (
     <div className="stack">
-      <h1>הסימונים שלי היום</h1>
+      <PageHeader title="היום" lede="ההשארות שסימנתם היום. אפשר לבטל סימון שעוד לא אושר." />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {rows.length === 0 ? <Empty>עוד לא סימנתם השארות היום.</Empty> : null}
       {rows.map((row) => (

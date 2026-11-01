@@ -157,7 +157,21 @@ export function ReportsPage() {
           הדפסה
         </Button>
       </div>
-      <div className="card table-wrap">
+      <div className="phone-only list">
+        {filtered.map((row) => (
+          <article key={row.id} className="person-card">
+            <span>
+              <b>{studentName(row.studentFirstName, row.studentLastName)}</b>
+              <span className="muted">
+                {formatDate(row.detentionDate)} · {row.className} · {row.reasonText} · {row.durationMinutes} דק׳
+              </span>
+            </span>
+            <span className="badge">{STATUS_LABEL[row.status]}</span>
+          </article>
+        ))}
+        {filtered.length === 0 ? <p className="empty">אין נתונים בטווח הזה.</p> : null}
+      </div>
+      <div className="card table-wrap desktop-only">
         <table>
           <thead>
             <tr>
