@@ -1,0 +1,301 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { getApi } from "../api";
+import type { ClassRoom, Gender, Student, StudentContact } from "../api/types";
+import { GENDER_LABEL } from "../api/types";
+import { useAuth } from "../auth";
+import { Banner, Button, Empty, Field, Ltr, studentName } from "../components/ui";
+import { classKey, draftsFromMatrix, readSpreadsheet, type ImportDraft } from "../lib/csv";
+import { normalizeIlPhone } from "../lib/phone";
+
+export function ClassPage() {
+  const { classId } = useParams();
+  const { session } = useAuth();
+  const role = session?.profile.role;
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [contacts, setContacts] = useState<StudentContact[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<ImportDraft[] | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const mine = classes.filter((room) => role === "admin" || room.homeroomTeacherId === session?.userId);
+  const selected = classId ? mine.find((room) => room.id === classId) : mine.length === 1 ? mine[0] : undefined;
+
+  async function load() {
+    const [nextClasses, nextStudents, nextContacts] = await Promise.all([
+      getApi().listClasses(),
+      getApi().listStudents(),
+      getApi().listContacts(),
+    ]);
+    setClasses(nextClasses);
+    setStudents(nextStudents);
+    setContacts(nextContacts);
+  }
+
+  useEffect(() => {
+    void load().catch((err: unknown) => setError(err instanceof Error ? err.message : "אירעה שגיאה"));
+  }, []);
+
+  const roster = useMemo(
+    () => students.filter((student) => student.classId === selected?.id),
+    [students, selected?.id],
+  );
+  const contactMap = useMemo(() => new Map(contacts.map((contact) => [contact.studentId, contact])), [contacts]);
+
+  async function onFile(file: File) {
+    setError(null);
+    const matrix = await readSpreadsheet(file);
+    const parsed = draftsFromMatrix(matrix).map((draft) => {
+      if (!selected) return draft;
+      if (!draft.className) return { ...draft, className: selected.name };
+      const allowed = role === "admin" ? classes : mine;
+      const match = allowed.find((room) => classKey(room.name) === classKey(draft.className));
+      if (!match) return { ...draft, error: draft.error ?? "הכיתה לא קיימת או לא משויכת אליכם" };
+      if (role !== "admin" && match.id !== selected.id) {
+        return { ...draft, error: draft.error ?? "אפשר לייבא רק לכיתה שלכם" };
+      }
+      return { ...draft, className: match.name };
+    });
+    setDrafts(parsed);
+  }
+
+  async function runImport() {
+    if (!drafts || !selected) return;
+    setImporting(true);
+    setError(null);
+    let saved = 0;
+    const failures: string[] = [];
+    for (const draft of drafts) {
+      if (draft.error || !draft.firstName) {
+        failures.push(`שורה ${draft.line}: ${draft.error ?? "חסר שם"}`);
+        continue;
+      }
+      const room = classes.find((item) => classKey(item.name) === classKey(draft.className));
+      if (!room) {
+        failures.push(`שורה ${draft.line}: כיתה לא נמצאה`);
+        continue;
+      }
+      const existing = students.find(
+        (student) =>
+          student.classId === room.id && student.firstName === draft.firstName && student.lastName === draft.lastName,
+      );
+      try {
+        await getApi().saveStudent({
+          id: existing?.id,
+          firstName: draft.firstName,
+          lastName: draft.lastName,
+          gender: draft.gender,
+          classId: room.id,
+          parentName: draft.parentName,
+          parentPhone: draft.parentPhone,
+          active: true,
+        });
+        saved += 1;
+      } catch (err) {
+        failures.push(`שורה ${draft.line}: ${err instanceof Error ? err.message : "שגיאה"}`);
+      }
+    }
+    setImporting(false);
+    setDrafts(null);
+    const savedLabel = saved === 1 ? "נשמרה שורה אחת" : `נשמרו ${saved} שורות`;
+    setInfo(`${savedLabel}${failures.length ? `. ${failures.length} נכשלו.` : "."}`);
+    if (failures.length) setError(failures.slice(0, 5).join("\n"));
+    await load();
+  }
+
+  if (!selected) {
+    return (
+      <div className="stack">
+        <h1>כיתות</h1>
+        {mine.length === 0 ? <Empty>עוד לא שויכה אליכם כיתה. בקשו ממנהל המערכת לשייך.</Empty> : null}
+        <div className="list">
+          {mine.map((room) => (
+            <Link key={room.id} className="person" to={`/class/${room.id}`}>
+              <b>{room.name}</b>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="stack">
+      <div className="spread">
+        <h1>כיתה {selected.name}</h1>
+        <a className="btn btn-ghost" href={`${import.meta.env.BASE_URL}templates/students-template.csv`}>
+          קובץ לדוגמה
+        </a>
+      </div>
+      {error ? <Banner tone="danger">{error}</Banner> : null}
+      {info ? <Banner>{info}</Banner> : null}
+      <StudentForm
+        classId={selected.id}
+        onSaved={async () => {
+          setEditing(null);
+          await load();
+        }}
+      />
+      <label className="btn btn-ghost">
+        ייבוא מאקסל או CSV
+        <input
+          type="file"
+          accept=".csv,.xlsx,.xls,text/csv"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void onFile(file).catch((err: unknown) => setError(err instanceof Error ? err.message : "הקובץ לא נקרא"));
+          }}
+        />
+      </label>
+      {drafts ? (
+        <section className="card stack">
+          <strong>{drafts.length} שורות לקליטה</strong>
+          <ul>
+            {drafts.slice(0, 8).map((draft) => (
+              <li key={draft.line}>
+                {draft.firstName} {draft.lastName} · {draft.className || "בלי כיתה"}
+                {draft.parentPhone && !normalizeIlPhone(draft.parentPhone) ? " · הטלפון לא יזוהה" : ""}
+                {draft.error ? ` · ${draft.error}` : ""}
+              </li>
+            ))}
+          </ul>
+          <Button disabled={importing} onClick={() => void runImport()}>
+            {importing ? "מייבאים…" : "אישור הייבוא"}
+          </Button>
+        </section>
+      ) : null}
+      <div className="list">
+        {roster.map((student) => {
+          const contact = contactMap.get(student.id);
+          return (
+            <article key={student.id} className="card stack">
+              <div className="spread">
+                <div>
+                  <strong>{studentName(student.firstName, student.lastName)}</strong>
+                  <div className="muted">
+                    {student.gender ? GENDER_LABEL[student.gender] : "ללא מגדר"}
+                    {student.active ? "" : " · לא פעיל"}
+                    {contact?.parentPhone ? (
+                      <>
+                        {" · "}
+                        <Ltr>{contact.parentPhone}</Ltr>
+                      </>
+                    ) : (
+                      " · אין טלפון"
+                    )}
+                  </div>
+                </div>
+                <Button variant="ghost" onClick={() => setEditing(editing === student.id ? null : student.id)}>
+                  עריכה
+                </Button>
+              </div>
+              {editing === student.id ? (
+                <StudentForm
+                  classId={selected.id}
+                  student={student}
+                  contact={contact}
+                  onSaved={async () => {
+                    setEditing(null);
+                    await load();
+                  }}
+                />
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+      {roster.length === 0 ? <Empty>אין תלמידים בכיתה.</Empty> : null}
+    </div>
+  );
+}
+
+function StudentForm({
+  classId,
+  student,
+  contact,
+  onSaved,
+}: {
+  classId: string;
+  student?: Student;
+  contact?: StudentContact;
+  onSaved: () => Promise<void>;
+}) {
+  const [firstName, setFirstName] = useState(student?.firstName ?? "");
+  const [lastName, setLastName] = useState(student?.lastName ?? "");
+  const [gender, setGender] = useState<Gender | "">(student?.gender ?? "");
+  const [parentName, setParentName] = useState(contact?.parentName ?? "");
+  const [parentPhone, setParentPhone] = useState(contact?.parentPhone ?? "");
+  const [active, setActive] = useState(student?.active ?? true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await getApi().saveStudent({
+        id: student?.id,
+        firstName,
+        lastName,
+        gender: gender || null,
+        classId,
+        parentName,
+        parentPhone,
+        active,
+      });
+      if (!student) {
+        setFirstName("");
+        setLastName("");
+        setGender("");
+        setParentName("");
+        setParentPhone("");
+        setActive(true);
+      }
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "השמירה נכשלה");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="stack">
+      {error ? <Banner tone="danger">{error}</Banner> : null}
+      <div className="row">
+        <Field label="שם פרטי">
+          <input value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+        </Field>
+        <Field label="שם משפחה">
+          <input value={lastName} onChange={(event) => setLastName(event.target.value)} />
+        </Field>
+      </div>
+      <Field label="מגדר">
+        <select value={gender} onChange={(event) => setGender(event.target.value as Gender | "")}>
+          <option value="">לא צוין</option>
+          <option value="male">זכר</option>
+          <option value="female">נקבה</option>
+        </select>
+      </Field>
+      <Field label="שם הורה">
+        <input value={parentName} onChange={(event) => setParentName(event.target.value)} />
+      </Field>
+      <Field label="טלפון הורה">
+        <input inputMode="tel" value={parentPhone} onChange={(event) => setParentPhone(event.target.value)} />
+      </Field>
+      {parentPhone && !normalizeIlPhone(parentPhone) ? <Banner tone="warn">המספר לא נראה ישראלי, וההודעה תדולג.</Banner> : null}
+      <label className="row">
+        <input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />
+        פעיל
+      </label>
+      <Button disabled={busy || !firstName.trim() || !lastName.trim()} onClick={() => void save()}>
+        {student ? "שמירת תלמיד" : "הוספת תלמיד"}
+      </Button>
+    </div>
+  );
+}

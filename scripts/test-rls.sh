@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Applies the migration on a throwaway database and checks row level security.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if ! pg_lsclusters --no-header | awk '{print $4}' | grep -qx online; then
+  sudo pg_ctlcluster 16 main start
+fi
+
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d postgres -c "drop database if exists hishaarut_rls;"
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d postgres -c "create database hishaarut_rls;"
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f scripts/prelude.sql
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260301000000_init.sql
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/seed.sql
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f scripts/test-rls.sql
+echo "RLS checks passed"
