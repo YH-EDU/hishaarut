@@ -1,4 +1,5 @@
 import { asError } from "../lib/errors";
+import { pagesRedirectUrl } from "../lib/supabaseKey";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import type {
   AppApi,
@@ -283,7 +284,7 @@ export const supabaseApi: AppApi = {
   },
 
   async signInWithGoogle() {
-    const redirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
+    const redirectTo = pagesRedirectUrl(window.location.origin, import.meta.env.BASE_URL);
     const hd = import.meta.env.VITE_GOOGLE_HD?.trim();
     const { error } = await client().auth.signInWithOAuth({
       provider: "google",

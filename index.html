@@ -17,7 +17,7 @@
           var saved = sessionStorage.getItem("hishaarut-gh-redirect");
           if (!saved) return;
           sessionStorage.removeItem("hishaarut-gh-redirect");
-          if (saved.charAt(0) === "/") history.replaceState(null, "", saved);
+          if (saved.indexOf("/hishaarut/") === 0) history.replaceState(null, "", saved);
         } catch (e) {}
       })();
     </script>

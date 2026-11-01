@@ -24,4 +24,4 @@ Demo without a Supabase project (development only):
 VITE_DEMO=1 npm run dev
 ```
 
-The anon key is the only Supabase credential that belongs in the client. Parent phone numbers are not readable by subject teachers; see the policies in `supabase/migrations`.
+Production is published from `main` to https://yh-edu.github.io/hishaarut/. The publishable Supabase key lives in `.env.production`. Parent phone numbers are not readable by subject teachers; see the policies in `supabase/migrations`.

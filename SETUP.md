@@ -44,9 +44,10 @@
 
    את `<PROJECT_REF>` רואים בכתובת הפרויקט ב-Supabase.
 5. ב-Supabase: **Authentication → Providers → Google**. הפעילו, והדביקו Client ID ו-Client Secret.
-6. **Authentication → URL configuration**:
-   - Site URL: כתובת האפליקציה, למשל `http://localhost:5173` בפיתוח
-   - Redirect URLs: `http://localhost:5173` וגם כתובת האתר באוויר, למשל `https://hishaarut.vercel.app`
+6. **Authentication → URL Configuration**. בלי השורות האלה גוגל חוזר עם שגיאת redirect והכניסה נעצרת.
+   - **Site URL**: `https://yh-edu.github.io/hishaarut/`
+   - **Redirect URLs**: אותה כתובת בדיוק, `https://yh-edu.github.io/hishaarut/`
+   - לפיתוח מקומי הוסיפו גם `http://localhost:5173` לרשימת ה-Redirect URLs.
 
 אחרי שהמנהל הראשון נכנס, קבעו במסך הניהול את הדומיין המורשה (למשל `school.education.gov.il`). מרגע זה הרשמה מגוגל עם דומיין אחר נחסמת במסד, גם אם מישהו עוקף את המסך. אל תגדירו את הדומיין לפני שהמשתמש הראשון הצליח להיכנס.
 
@@ -58,14 +59,9 @@
 cp .env.example .env
 ```
 
-מלאו:
+מלאו מ-`.env.production` את הכתובת ואת המפתח שמתחיל ב-`sb_publishable_`. אל תעתיקו את `VITE_BASE_PATH`: בפיתוח מקומי הוא נשאר `/`.
 
-```bash
-VITE_SUPABASE_URL=https://<PROJECT_REF>.supabase.co
-VITE_SUPABASE_ANON_KEY=<המפתח הציבורי anon>
-```
-
-את המפתח לוקחים מ-**Project Settings → API**. לא את `service_role`.
+את המפתח לוקחים גם מ-**Project Settings → API Keys**. זה המפתח הציבורי, לא `sb_secret_` ולא `service_role`.
 
 ```bash
 npm install
@@ -110,28 +106,24 @@ set allowed_email_domain = null
 where id = 1;
 ```
 
-## 6. העלאה לאוויר
+## 6. העלאה ל-GitHub Pages
 
-האפליקציה היא אתר סטטי. השרת היחיד הוא Supabase.
+האתר של בית הספר הוא `https://yh-edu.github.io/hishaarut/`.
+כל דחיפה לענף `main` מריצה את `.github/workflows/pages.yml`: בדיקות, בנייה עם הנתיב `/hishaarut/`, ופרסום ל-GitHub Pages.
 
-### Vercel
+מפתח `sb_publishable_…` שבקובץ `.env.production` הוא המפתח הציבורי החדש של Supabase. מותר שהוא יהיה בקוד. אסור לשים שם מפתח `sb_secret_` או `service_role`.
 
-1. ייבאו את הריפו.
-2. Framework: Vite.
-3. הוסיפו את `VITE_SUPABASE_URL` ואת `VITE_SUPABASE_ANON_KEY`.
-4. השאירו את `VITE_BASE_PATH` ריק או `/`.
-5. אחרי הפרסום, הוסיפו את כתובת האתר ל-Redirect URLs ב-Supabase.
+פעם אחת, לפני שהאתר עולה:
 
-קובץ `vercel.json` כבר מנתב כל נתיב אל `index.html`.
+1. בגיטהאב: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. ב-Supabase: **Authentication → URL Configuration**.
+   - **Site URL**: `https://yh-edu.github.io/hishaarut/`
+   - **Redirect URLs**: `https://yh-edu.github.io/hishaarut/`
+3. מזגו את בקשת המשיכה ל-`main`. רק אז הוורקפלואו מפרסם.
 
-### GitHub Pages
+ניווט ישיר לכתובת כמו `/hishaarut/search` עובד כי הבנייה מעתיקה את `index.html` אל `404.html`. GitHub Pages מגיש את הקובץ הזה בלי לשנות את הכתובת בדפדפן.
 
-מתאים לאתר פרויקט בכתובת `https://<user>.github.io/<repo>/`.
-
-1. בנו עם `VITE_BASE_PATH=/<repo>/`.
-2. פרסמו את תיקיית `dist`.
-3. `public/404.html` מחזיר רענון של נתיב פנימי אל דף הבית, כדי שניווט ישיר יעבוד.
-4. הוסיפו את הכתובת המלאה, כולל סלאש בסוף אם כך Vite מפנה, ל-Redirect URLs.
+אפשר עדיין לארח ב-Vercel עם `VITE_BASE_PATH=/`. קובץ `vercel.json` מנתב כל נתיב אל `index.html`.
 
 בטלפון: ב-Chrome בחרו «הוספה למסך הבית», או ב-Safari «שתף → הוסף למסך הבית». האפליקציה נפתחת במסך מלא, בעברית, מימין לשמאל.
 

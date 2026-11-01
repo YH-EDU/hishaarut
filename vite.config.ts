@@ -1,10 +1,14 @@
-import { defineConfig } from "vite";
+import fs from "node:fs";
+import path from "node:path";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
-const base = process.env.VITE_BASE_PATH || "/";
+export default defineConfig(({ mode }) => {
+  const fileEnv = loadEnv(mode, process.cwd(), "VITE_");
+  const base = process.env.VITE_BASE_PATH || fileEnv.VITE_BASE_PATH || "/";
 
-export default defineConfig({
+  return {
   base,
   plugins: [
     react(),
@@ -33,5 +37,15 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2,csv}"],
       },
     }),
+    {
+      name: "github-pages-spa-fallback",
+      apply: "build",
+      closeBundle() {
+        const dist = path.resolve("dist");
+        const index = path.join(dist, "index.html");
+        if (fs.existsSync(index)) fs.copyFileSync(index, path.join(dist, "404.html"));
+      },
+    },
   ],
+  };
 });

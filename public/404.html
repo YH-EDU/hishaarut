@@ -4,16 +4,20 @@
     <meta charset="utf-8" />
     <title>השארות</title>
     <script>
+      // Used only if the production build did not replace this file with index.html.
+      // GitHub Pages keeps the original URL when it serves 404.html, but this
+      // fallback also works if the host redirects to the 404 document itself.
       (function () {
-        var parts = location.pathname.split("/").filter(Boolean);
-        var base = "/";
-        if (location.hostname.endsWith("github.io") && parts.length) {
-          base = "/" + parts[0] + "/";
-        }
+        var base = "/hishaarut/";
+        var path = location.pathname + location.search + location.hash;
         try {
-          sessionStorage.setItem("hishaarut-gh-redirect", location.pathname + location.search + location.hash);
+          if (path.indexOf(base) === 0 && path !== base) {
+            sessionStorage.setItem("hishaarut-gh-redirect", path);
+          }
         } catch (e) {}
-        location.replace(base);
+        if (location.pathname !== base && location.pathname !== "/hishaarut") {
+          location.replace(base);
+        }
       })();
     </script>
   </head>
