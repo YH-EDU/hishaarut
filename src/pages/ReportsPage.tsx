@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getApi } from "../api";
 import type { ClassRoom, Detention, Reason } from "../api/types";
 import { STATUS_LABEL } from "../api/types";
+import { PageHeader } from "../components/PageHeader";
 import { Banner, Button, Field, studentName } from "../components/ui";
 import { formatDate, jerusalemToday, shiftDate } from "../lib/dates";
 import { downloadText, downloadXlsx, reportToCsv, type ReportExportRow } from "../lib/exportReport";
@@ -83,7 +84,9 @@ export function ReportsPage() {
           דוח השארות {formatDate(from)} – {formatDate(to)}
         </p>
       </div>
-      <h1 className="no-print">דוחות</h1>
+      <div className="no-print">
+        <PageHeader title="דוחות" lede="כמה השארות היו לפי תלמיד, כיתה, סיבה וטווח תאריכים. אפשר לייצא או להדפיס." />
+      </div>
       {error ? <Banner tone="danger">{error}</Banner> : null}
       <section className="card stack no-print">
         <div className="row">

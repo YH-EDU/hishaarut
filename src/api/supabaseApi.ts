@@ -386,13 +386,23 @@ export const supabaseApi: AppApi = {
   async listContacts() {
     const { data, error } = await client().rpc("list_student_contacts");
     if (error) throw asError(error);
-    return ((data ?? []) as { student_id: string; parent_name: string | null; parent_phone: string | null }[]).map(
-      (row) => ({
-        studentId: row.student_id,
-        parentName: row.parent_name,
-        parentPhone: row.parent_phone,
-      }),
-    );
+    return (
+      (data ?? []) as {
+        student_id: string;
+        parent_name: string | null;
+        parent_phone: string | null;
+        parent2_name?: string | null;
+        parent2_phone?: string | null;
+        national_id?: string | null;
+      }[]
+    ).map((row) => ({
+      studentId: row.student_id,
+      parentName: row.parent_name,
+      parentPhone: row.parent_phone,
+      parent2Name: row.parent2_name ?? null,
+      parent2Phone: row.parent2_phone ?? null,
+      nationalId: row.national_id ?? null,
+    }));
   },
 
   async saveStudent(input: StudentInput) {
@@ -403,6 +413,9 @@ export const supabaseApi: AppApi = {
       class_id: input.classId,
       parent_name: input.parentName || null,
       parent_phone: input.parentPhone || null,
+      parent2_name: input.parent2Name || null,
+      parent2_phone: input.parent2Phone || null,
+      national_id: input.nationalId || null,
       active: input.active,
     };
     if (input.id) {

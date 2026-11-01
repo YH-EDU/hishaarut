@@ -10,7 +10,11 @@ fi
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d postgres -c "drop database if exists hishaarut_rls;"
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d postgres -c "create database hishaarut_rls;"
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f scripts/prelude.sql
-sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260301000000_init.sql
+for migration in supabase/migrations/*.sql; do
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f "$migration"
+done
+# The follow-up migration is what an existing project pastes. Run it twice.
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260302000000_secretary_management.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/seed.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f scripts/test-rls.sql
 echo "RLS checks passed"

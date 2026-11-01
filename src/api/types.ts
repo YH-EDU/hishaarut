@@ -49,6 +49,9 @@ export interface StudentContact {
   studentId: string;
   parentName: string | null;
   parentPhone: string | null;
+  parent2Name: string | null;
+  parent2Phone: string | null;
+  nationalId: string | null;
 }
 
 export interface Reason {
@@ -110,6 +113,9 @@ export interface StudentInput {
   classId: string;
   parentName: string;
   parentPhone: string;
+  parent2Name?: string;
+  parent2Phone?: string;
+  nationalId?: string;
   active: boolean;
 }
 

@@ -4,34 +4,31 @@ import { getApi } from "../api";
 import type { Role } from "../api/types";
 import { useAuth } from "../auth";
 
-const NAV: Record<Role, Array<{ to: string; label: string }>> = {
-  teacher: [
-    { to: "/search", label: "סימון" },
-    { to: "/mine", label: "שלי" },
-    { to: "/reports", label: "דוחות" },
-  ],
-  homeroom: [
-    { to: "/search", label: "סימון" },
-    { to: "/mine", label: "שלי" },
-    { to: "/class", label: "הכיתה" },
-    { to: "/reports", label: "דוחות" },
-  ],
-  secretary: [
-    { to: "/dashboard", label: "היום" },
-    { to: "/search", label: "סימון" },
-    { to: "/reports", label: "דוחות" },
-  ],
-  admin: [
-    { to: "/dashboard", label: "היום" },
-    { to: "/search", label: "סימון" },
-    { to: "/reports", label: "דוחות" },
-    { to: "/admin", label: "ניהול" },
-  ],
-};
+interface NavItem {
+  to: string;
+  label: string;
+  short: string;
+}
+
+function navFor(role: Role): NavItem[] {
+  const today = { to: "/dashboard", label: "היום", short: "היום" };
+  const mark = { to: "/search", label: "סימון תלמיד", short: "סימון" };
+  const mine = { to: "/mine", label: "הסימונים שלי", short: "שלי" };
+  const students = { to: "/roster", label: "תלמידים וכיתות", short: "תלמידים" };
+  const ownClass = { to: "/class", label: "הכיתה שלי", short: "הכיתה" };
+  const staff = { to: "/staff", label: "צוות", short: "צוות" };
+  const reports = { to: "/reports", label: "דוחות", short: "דוחות" };
+  const settings = { to: "/settings", label: "הגדרות", short: "הגדרות" };
+  if (role === "admin") return [today, mark, students, staff, reports, settings];
+  if (role === "secretary") return [today, mark, students, staff, reports];
+  if (role === "homeroom") return [mark, mine, ownClass, reports];
+  return [mark, mine, reports];
+}
 
 export function Layout() {
   const { session, demo } = useAuth();
   const role = session?.profile.role ?? "teacher";
+  const items = navFor(role);
   const [school, setSchool] = useState("השארות");
 
   useEffect(() => {
@@ -43,23 +40,38 @@ export function Layout() {
 
   return (
     <div className="app-shell">
-      {demo ? <div className="demo-banner">מצב הדגמה. הנתונים נשמרים רק בדפדפן הזה.</div> : null}
-      <header className="topbar no-print">
+      <aside className="sidenav no-print">
         <div className="brand">
-          <strong>{school}</strong>
-          <span>{session?.profile.fullName || session?.email}</span>
+          <strong>השארות</strong>
+          <span>{school}</span>
         </div>
-        <Link className="btn btn-ghost" to="/account">
-          חשבון
-        </Link>
-      </header>
-      <main className="main">
-        <Outlet />
-      </main>
+        <nav>
+          {items.map((item) => (
+            <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      </aside>
+      <div className="workspace">
+        {demo ? <div className="demo-banner">מצב הדגמה. הנתונים נשמרים רק בדפדפן הזה.</div> : null}
+        <header className="topbar no-print">
+          <div className="brand">
+            <strong>{school}</strong>
+            <span>{session?.profile.fullName || session?.email}</span>
+          </div>
+          <Link className="btn btn-ghost" to="/account">
+            חשבון
+          </Link>
+        </header>
+        <main className="main">
+          <Outlet />
+        </main>
+      </div>
       <nav className="tabbar no-print">
-        {NAV[role].map((item) => (
+        {items.map((item) => (
           <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
-            {item.label}
+            {item.short}
           </NavLink>
         ))}
       </nav>
