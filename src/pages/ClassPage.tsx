@@ -4,8 +4,9 @@ import { getApi } from "../api";
 import type { ClassRoom, Gender, Student, StudentContact } from "../api/types";
 import { GENDER_LABEL } from "../api/types";
 import { useAuth } from "../auth";
+import { ImportWizard } from "../components/ImportWizard";
+import { PageHeader } from "../components/PageHeader";
 import { Banner, Button, Empty, Field, Ltr, studentName } from "../components/ui";
-import { classKey, draftsFromMatrix, readSpreadsheet, type ImportDraft } from "../lib/csv";
 import { normalizeIlPhone } from "../lib/phone";
 
 export function ClassPage() {
@@ -18,10 +19,9 @@ export function ClassPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<ImportDraft[] | null>(null);
-  const [importing, setImporting] = useState(false);
 
-  const mine = classes.filter((room) => role === "admin" || room.homeroomTeacherId === session?.userId);
+  const managesAll = role === "admin" || role === "secretary";
+  const mine = classes.filter((room) => managesAll || room.homeroomTeacherId === session?.userId);
   const selected = classId ? mine.find((room) => room.id === classId) : mine.length === 1 ? mine[0] : undefined;
 
   async function load() {
@@ -45,67 +45,6 @@ export function ClassPage() {
   );
   const contactMap = useMemo(() => new Map(contacts.map((contact) => [contact.studentId, contact])), [contacts]);
 
-  async function onFile(file: File) {
-    setError(null);
-    const matrix = await readSpreadsheet(file);
-    const parsed = draftsFromMatrix(matrix).map((draft) => {
-      if (!selected) return draft;
-      if (!draft.className) return { ...draft, className: selected.name };
-      const allowed = role === "admin" ? classes : mine;
-      const match = allowed.find((room) => classKey(room.name) === classKey(draft.className));
-      if (!match) return { ...draft, error: draft.error ?? "הכיתה לא קיימת או לא משויכת אליכם" };
-      if (role !== "admin" && match.id !== selected.id) {
-        return { ...draft, error: draft.error ?? "אפשר לייבא רק לכיתה שלכם" };
-      }
-      return { ...draft, className: match.name };
-    });
-    setDrafts(parsed);
-  }
-
-  async function runImport() {
-    if (!drafts || !selected) return;
-    setImporting(true);
-    setError(null);
-    let saved = 0;
-    const failures: string[] = [];
-    for (const draft of drafts) {
-      if (draft.error || !draft.firstName) {
-        failures.push(`שורה ${draft.line}: ${draft.error ?? "חסר שם"}`);
-        continue;
-      }
-      const room = classes.find((item) => classKey(item.name) === classKey(draft.className));
-      if (!room) {
-        failures.push(`שורה ${draft.line}: כיתה לא נמצאה`);
-        continue;
-      }
-      const existing = students.find(
-        (student) =>
-          student.classId === room.id && student.firstName === draft.firstName && student.lastName === draft.lastName,
-      );
-      try {
-        await getApi().saveStudent({
-          id: existing?.id,
-          firstName: draft.firstName,
-          lastName: draft.lastName,
-          gender: draft.gender,
-          classId: room.id,
-          parentName: draft.parentName,
-          parentPhone: draft.parentPhone,
-          active: true,
-        });
-        saved += 1;
-      } catch (err) {
-        failures.push(`שורה ${draft.line}: ${err instanceof Error ? err.message : "שגיאה"}`);
-      }
-    }
-    setImporting(false);
-    setDrafts(null);
-    const savedLabel = saved === 1 ? "נשמרה שורה אחת" : `נשמרו ${saved} שורות`;
-    setInfo(`${savedLabel}${failures.length ? `. ${failures.length} נכשלו.` : "."}`);
-    if (failures.length) setError(failures.slice(0, 5).join("\n"));
-    await load();
-  }
-
   if (!selected) {
     return (
       <div className="stack">
@@ -124,12 +63,7 @@ export function ClassPage() {
 
   return (
     <div className="stack">
-      <div className="spread">
-        <h1>כיתה {selected.name}</h1>
-        <a className="btn btn-ghost" href={`${import.meta.env.BASE_URL}templates/students-template.csv`}>
-          קובץ לדוגמה
-        </a>
-      </div>
+      <PageHeader title={`כיתה ${selected.name}`} lede="רשימת התלמידים של הכיתה. אפשר לייבא קובץ או לעדכן טלפון של הורה." />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
       <StudentForm
@@ -139,36 +73,16 @@ export function ClassPage() {
           await load();
         }}
       />
-      <label className="btn btn-ghost">
-        ייבוא מאקסל או CSV
-        <input
-          type="file"
-          accept=".csv,.xlsx,.xls,text/csv"
-          hidden
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) void onFile(file).catch((err: unknown) => setError(err instanceof Error ? err.message : "הקובץ לא נקרא"));
-          }}
-        />
-      </label>
-      {drafts ? (
-        <section className="card stack">
-          <strong>{drafts.length} שורות לקליטה</strong>
-          <ul>
-            {drafts.slice(0, 8).map((draft) => (
-              <li key={draft.line}>
-                {draft.firstName} {draft.lastName} · {draft.className || "בלי כיתה"}
-                {draft.parentPhone && !normalizeIlPhone(draft.parentPhone) ? " · הטלפון לא יזוהה" : ""}
-                {draft.error ? ` · ${draft.error}` : ""}
-              </li>
-            ))}
-          </ul>
-          <Button disabled={importing} onClick={() => void runImport()}>
-            {importing ? "מייבאים…" : "אישור הייבוא"}
-          </Button>
-        </section>
-      ) : null}
+      <ImportWizard
+        classes={mine}
+        students={students.filter((student) => mine.some((room) => room.id === student.classId))}
+        contacts={contacts}
+        canCreateClasses={managesAll}
+        onImported={async (message) => {
+          setInfo(message);
+          await load();
+        }}
+      />
       <div className="list">
         {roster.map((student) => {
           const contact = contactMap.get(student.id);

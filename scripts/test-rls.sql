@@ -542,3 +542,97 @@ begin
   end if;
 end $$;
 reset role;
+
+-- The secretary runs the roster and staff list, but cannot touch an admin.
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000004', false);
+set role authenticated;
+do $$
+declare
+  n int;
+begin
+  update public.profiles
+    set role = 'homeroom'
+    where id = '30000000-0000-0000-0000-000000000005';
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'secretary could not assign a staff role';
+  end if;
+
+  insert into public.classes (name, grade)
+  values ('ז׳9', 'ז');
+
+  update public.classes
+    set homeroom_teacher_id = '30000000-0000-0000-0000-000000000005'
+    where name = 'ז׳9';
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'secretary could not assign a homeroom class';
+  end if;
+
+  update public.students
+    set parent_phone = '050-7000080'
+    where id = '20000000-0000-0000-0000-000000000005';
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'secretary could not edit a parent phone';
+  end if;
+
+  begin
+    update public.profiles
+      set role = 'admin'
+      where id = '30000000-0000-0000-0000-000000000002';
+    raise exception 'secretary granted admin';
+  exception
+    when others then
+      if sqlerrm not like '%מזכירות לא יכולה למנות או לשנות מנהל%' then
+        raise;
+      end if;
+  end;
+
+  update public.profiles
+    set role = 'teacher'
+    where id = '30000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception 'secretary changed an admin role';
+  end if;
+
+  update public.school_settings set school_name = 'שינוי מזכירות' where id = 1;
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception 'secretary changed school settings';
+  end if;
+
+  begin
+    insert into public.detention_reasons (label, sort_order) values ('סיבה של מזכירות', 99);
+    raise exception 'secretary edited reasons';
+  exception
+    when insufficient_privilege or check_violation or others then
+      if sqlerrm not like '%row-level security%' then
+        raise;
+      end if;
+  end;
+end $$;
+reset role;
+
+do $$
+begin
+  if (select role from public.profiles where id = '30000000-0000-0000-0000-000000000005') <> 'homeroom' then
+    raise exception 'secretary staff assignment did not stick';
+  end if;
+  if (select role from public.profiles where id = '30000000-0000-0000-0000-000000000001') <> 'admin' then
+    raise exception 'admin role was changed by the secretary';
+  end if;
+  if (select role from public.profiles where id = '30000000-0000-0000-0000-000000000002') = 'admin' then
+    raise exception 'secretary promotion to admin stuck';
+  end if;
+  if (select parent_phone from public.students where id = '20000000-0000-0000-0000-000000000005') <> '050-7000080' then
+    raise exception 'secretary phone edit did not stick';
+  end if;
+  if not exists (
+    select 1 from public.classes
+    where name = 'ז׳9' and homeroom_teacher_id = '30000000-0000-0000-0000-000000000005'
+  ) then
+    raise exception 'secretary class assignment did not stick';
+  end if;
+end $$;

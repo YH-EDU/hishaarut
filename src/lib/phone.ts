@@ -15,6 +15,12 @@ export function normalizeIlPhone(raw: string | null | undefined): string | null 
   return null;
 }
 
+/** E.164 with a leading plus, for example +972501234567. */
+export function toE164(raw: string | null | undefined): string | null {
+  const normalized = normalizeIlPhone(raw);
+  return normalized ? `+${normalized}` : null;
+}
+
 export function whatsappUrl(phone: string | null | undefined, message: string): string | null {
   const normalized = normalizeIlPhone(phone);
   if (!normalized || !message.trim()) return null;

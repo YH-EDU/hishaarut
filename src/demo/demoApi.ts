@@ -74,7 +74,14 @@ function seed(): DemoState {
   }));
   const contacts: Record<string, StudentContact> = {};
   rows.forEach(([id, , , , , parentName, parentPhone]) => {
-    contacts[id] = { studentId: id, parentName, parentPhone };
+    contacts[id] = {
+      studentId: id,
+      parentName,
+      parentPhone,
+      parent2Name: null,
+      parent2Phone: null,
+      nationalId: null,
+    };
   });
   return {
     currentId: null,
@@ -154,7 +161,7 @@ function canSign(profile: Profile): boolean {
 }
 
 function managesClass(profile: Profile, classId: string): boolean {
-  if (profile.role === "admin") return true;
+  if (profile.role === "admin" || profile.role === "secretary") return true;
   if (profile.role !== "homeroom") return false;
   return state.classes.some((room) => room.id === classId && room.homeroomTeacherId === profile.id);
 }
@@ -170,7 +177,7 @@ function enqueue(detention: Detention, event: NotificationRow["event"]) {
   const contact = student ? state.contacts[student.id] : undefined;
   const marker = state.profiles.find((item) => item.id === detention.markedBy);
   const channel = state.settings.notificationMode === "cloud_api" ? "whatsapp_cloud" : "whatsapp_link";
-  const parentPhone = normalizeIlPhone(contact?.parentPhone);
+  const parentPhone = normalizeIlPhone(contact?.parentPhone) ?? normalizeIlPhone(contact?.parent2Phone);
   const homeroomPhone = normalizeIlPhone(homeroom?.phone);
   const base = {
     event,
@@ -299,7 +306,7 @@ export const demoApi: AppApi = {
 
   async saveClass(input) {
     const profile = requireUser();
-    if (profile.role !== "admin") throw new Error("אין הרשאה לפעולה הזו");
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("אין הרשאה לפעולה הזו");
     if (input.homeroomTeacherId) {
       const teacher = state.profiles.find((item) => item.id === input.homeroomTeacherId);
       if (teacher?.role !== "homeroom") throw new Error("מחנך הכיתה חייב להיות משתמש בתפקיד מחנך");
@@ -359,6 +366,9 @@ export const demoApi: AppApi = {
         studentId: student.id,
         parentName: input.parentName.trim() || null,
         parentPhone: input.parentPhone.trim() || null,
+        parent2Name: input.parent2Name?.trim() || null,
+        parent2Phone: input.parent2Phone?.trim() || null,
+        nationalId: input.nationalId?.trim() || null,
       };
     } else {
       const id = crypto.randomUUID();
@@ -374,6 +384,9 @@ export const demoApi: AppApi = {
         studentId: id,
         parentName: input.parentName.trim() || null,
         parentPhone: input.parentPhone.trim() || null,
+        parent2Name: input.parent2Name?.trim() || null,
+        parent2Phone: input.parent2Phone?.trim() || null,
+        nationalId: input.nationalId?.trim() || null,
       };
     }
     emitChange();
@@ -413,10 +426,16 @@ export const demoApi: AppApi = {
 
   async setUserRole(userId, role) {
     const profile = requireUser();
-    if (profile.role !== "admin") throw new Error("רק מנהל יכול לשנות תפקיד");
     const target = state.profiles.find((item) => item.id === userId);
     if (!target) throw new Error("המשתמש לא נמצא");
-    if (target.role === "admin" && role !== "admin") {
+    if (profile.role === "secretary") {
+      if (target.role === "admin" || role === "admin") {
+        throw new Error("מזכירות לא יכולה למנות או לשנות מנהל");
+      }
+    } else if (profile.role !== "admin") {
+      throw new Error("רק מנהל יכול לשנות תפקיד");
+    }
+    if (profile.role === "admin" && target.role === "admin" && role !== "admin") {
       const others = state.profiles.filter((item) => item.role === "admin" && item.id !== target.id);
       if (others.length === 0) throw new Error("אי אפשר להסיר את המנהל האחרון");
     }

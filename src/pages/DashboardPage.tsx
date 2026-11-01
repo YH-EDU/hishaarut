@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApi } from "../api";
 import type { Detention, NotificationRow, SchoolSettings } from "../api/types";
+import { GettingStarted } from "../components/GettingStarted";
+import { PageHeader } from "../components/PageHeader";
 import { Banner, Button, Empty, Ltr, StatusPill, studentName } from "../components/ui";
 import { formatTime, jerusalemToday } from "../lib/dates";
 import { dispatchNotification } from "../lib/notifications";
@@ -172,13 +174,17 @@ export function DashboardPage() {
   return (
     <div className="stack">
       <div className="spread">
-        <h1>השארות להיום</h1>
+        <PageHeader
+          title="היום"
+          lede="רשימת ההשארות של היום. מאשרים שהתלמיד סיים, ושולחים להורה ולמחנך מהמספר העסקי של בית הספר."
+        />
         <span className="badge badge-live">
           <span className={live ? "live-dot" : "live-dot off"} /> {live ? "מתעדכן" : "רענון ידני"}
         </span>
       </div>
+      <GettingStarted />
       <p className="muted">
-        פותחים את הוואטסאפ מהמכשיר שמחובר למספר העסקי של בית הספר
+        פותחים את הוואטסאפ מהמכשיר שמחובר למספר העסקי
         {settings?.whatsappDisplayNumber ? ` (${settings.whatsappDisplayNumber})` : ""}.
       </p>
       {settings?.notificationMode === "cloud_api" ? (

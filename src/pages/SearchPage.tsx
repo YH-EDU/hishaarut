@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getApi } from "../api";
 import type { ClassRoom, Student } from "../api/types";
+import { PageHeader } from "../components/PageHeader";
 import { Banner, Empty, studentName } from "../components/ui";
 import { classKey } from "../lib/csv";
 
@@ -64,7 +65,7 @@ export function SearchPage() {
 
   return (
     <div className="stack">
-      <h1>סימון השארות</h1>
+      <PageHeader title="סימון תלמיד" lede="מחפשים לפי שם או כיתה, בוחרים סיבה ומשך, ולוחצים סמן להשארות." />
       {flash ? <Banner>{flash}</Banner> : null}
       {error ? <Banner tone="danger">{error}</Banner> : null}
       <input
