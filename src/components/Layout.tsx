@@ -29,20 +29,20 @@ export function Layout() {
   const { session, demo } = useAuth();
   const role = session?.profile.role ?? "teacher";
   const items = navFor(role);
-  const [school, setSchool] = useState("השארות");
+  const [school, setSchool] = useState("נשארים");
 
   useEffect(() => {
     void getApi()
       .getSettings()
       .then((settings) => setSchool(settings.schoolName))
-      .catch(() => setSchool("השארות"));
+      .catch(() => setSchool("נשארים"));
   }, []);
 
   return (
     <div className="app-shell">
       <aside className="sidenav no-print">
         <div className="brand">
-          <strong>השארות</strong>
+          <strong>נשארים</strong>
           <span>{school}</span>
         </div>
         <nav>

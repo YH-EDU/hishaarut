@@ -1,12 +1,13 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import type { Role } from "./api/types";
+import { getApi } from "./api";
+import type { AccessStatus, Role } from "./api/types";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { AccountPage } from "./pages/AccountPage";
 import { ClassPage } from "./pages/ClassPage";
 import { DashboardPage } from "./pages/DashboardPage";
-import { Forbidden, LoginPage, PendingPage, SetupMissingPage } from "./pages/LoginPage";
+import { DeniedPage, Forbidden, LoginPage, PendingPage, SetupMissingPage } from "./pages/LoginPage";
 import { MarkPage } from "./pages/MarkPage";
 import { MyMarksPage } from "./pages/MyMarksPage";
 import { ReportsPage } from "./pages/ReportsPage";
@@ -34,13 +35,43 @@ export default function App() {
   if (loading) {
     return (
       <div className="login">
-        <h1>השארות</h1>
+        <h1>נשארים</h1>
         <p>טוען…</p>
       </div>
     );
   }
   if (!session) return <LoginPage />;
-  if (!session.profile.role) return <PendingPage />;
+  return <SignedIn sessionRole={session.profile.role} />;
+}
+
+function SignedIn({ sessionRole }: { sessionRole: Role | null }) {
+  const [status, setStatus] = useState<AccessStatus | "loading">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    void getApi()
+      .accessStatus()
+      .then((next) => {
+        if (!cancelled) setStatus(next);
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("denied");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionRole]);
+
+  if (status === "loading") {
+    return (
+      <div className="login">
+        <h1>נשארים</h1>
+        <p>טוען…</p>
+      </div>
+    );
+  }
+  if (status === "denied") return <DeniedPage />;
+  if (status === "pending" || !sessionRole) return <PendingPage />;
 
   return (
     <Routes>

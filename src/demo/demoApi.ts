@@ -21,6 +21,7 @@ import type {
 interface DemoState {
   currentId: string | null;
   settings: SchoolSettings;
+  allowedEmails: string[];
   profiles: Profile[];
   classes: ClassRoom[];
   students: Student[];
@@ -92,6 +93,7 @@ function seed(): DemoState {
       whatsappPhoneNumberId: null,
       whatsappDisplayNumber: null,
     },
+    allowedEmails: [],
     profiles,
     classes,
     students,
@@ -295,6 +297,35 @@ export const demoApi: AppApi = {
     const profile = requireUser();
     if (profile.role !== "admin") throw new Error("רק מנהל יכול לעדכן הגדרות");
     state.settings = { ...patch };
+    emitChange();
+  },
+
+  async accessStatus() {
+    const profile = requireUser();
+    const domain = state.settings.allowedEmailDomain?.trim().toLowerCase() ?? "";
+    const listed = (state.allowedEmails ?? []).map((email) => email.toLowerCase());
+    const restricted = domain.length > 0 || listed.length > 0;
+    if (restricted) {
+      const email = profile.email.toLowerCase();
+      const domainOk = domain.length > 0 && email.endsWith(`@${domain}`);
+      if (!domainOk && !listed.includes(email)) return "denied";
+    }
+    return profile.role ? "ok" : "pending";
+  },
+
+  async listAllowedEmails() {
+    const profile = requireUser();
+    if (profile.role !== "admin") throw new Error("רק מנהל יכול לעדכן הגדרות");
+    return [...(state.allowedEmails ?? [])];
+  },
+
+  async setAllowedEmails(emails) {
+    const profile = requireUser();
+    if (profile.role !== "admin") throw new Error("רק מנהל יכול לעדכן הגדרות");
+    const unique = new Set(
+      emails.map((email) => email.trim().toLowerCase()).filter((email) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)),
+    );
+    state.allowedEmails = [...unique];
     emitChange();
   },
 

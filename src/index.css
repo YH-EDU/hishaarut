@@ -204,6 +204,7 @@ input:focus, select:focus, textarea:focus {
   margin: 0 auto;
 }
 .mark { font-size: 2rem; width: 72px; height: 72px; display: grid; place-items: center; border-radius: 22px; background: var(--primary); color: white; }
+.app-icon { width: 72px; height: 72px; border-radius: 18px; display: block; }
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
 th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; }
 .table-wrap { overflow-x: auto; }

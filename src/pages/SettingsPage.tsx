@@ -102,18 +102,37 @@ function SchoolForm({
   onError: (message: string) => void;
 }) {
   const [draft, setDraft] = useState(settings);
+  const [emailsText, setEmailsText] = useState("");
+
+  useEffect(() => {
+    void getApi()
+      .listAllowedEmails()
+      .then((emails) => setEmailsText(emails.join("\n")))
+      .catch((err: unknown) => onError(err instanceof Error ? err.message : "אירעה שגיאה"));
+  }, [onError]);
+
   return (
     <section className="panel stack">
       <h2>בית הספר</h2>
-      <p className="muted">השם נכנס להודעת הוואטסאפ. הדומיין חוסם כניסה מחשבון גוגל שלא של בית הספר.</p>
+      <p className="muted">השם נכנס להודעת הוואטסאפ. כל עוד הדומיין ורשימת המיילים ריקים, אין הגבלה. ברגע שממלאים אחד מהם, רק מי שתואם לדומיין או נמצא ברשימה רואה נתונים.</p>
       <Field label="שם בית הספר בהודעות">
         <input value={draft.schoolName} onChange={(event) => setDraft({ ...draft, schoolName: event.target.value })} />
       </Field>
-      <Field label="דומיין גוגל מורשה">
+      <Field label="דומיין מורשה">
         <input
+          className="ltr"
           placeholder="school.education.gov.il"
           value={draft.allowedEmailDomain ?? ""}
           onChange={(event) => setDraft({ ...draft, allowedEmailDomain: event.target.value })}
+        />
+      </Field>
+      <Field label="מיילים מורשים, אחד בכל שורה">
+        <textarea
+          className="ltr"
+          rows={5}
+          placeholder={"principal@gmail.com\nteacher@school.education.gov.il"}
+          value={emailsText}
+          onChange={(event) => setEmailsText(event.target.value)}
         />
       </Field>
       <Field label="מספר הוואטסאפ העסקי שמוצג לצוות">
@@ -150,6 +169,7 @@ function SchoolForm({
               whatsappPhoneNumberId: draft.whatsappPhoneNumberId?.trim() || null,
               whatsappDisplayNumber: draft.whatsappDisplayNumber?.trim() || null,
             })
+            .then(() => getApi().setAllowedEmails(emailsText.split(/\n+/)))
             .then(onSaved)
             .catch((err: unknown) => onError(err instanceof Error ? err.message : "השמירה נכשלה"))
         }

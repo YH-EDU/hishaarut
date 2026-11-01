@@ -28,6 +28,8 @@ export interface SchoolSettings {
   whatsappDisplayNumber: string | null;
 }
 
+export type AccessStatus = "ok" | "pending" | "denied";
+
 export interface ClassRoom {
   id: string;
   name: string;
@@ -153,6 +155,9 @@ export interface AppApi {
   updateOwnProfile(patch: { fullName: string; phone: string }): Promise<void>;
   getSettings(): Promise<SchoolSettings>;
   updateSettings(patch: SchoolSettings): Promise<void>;
+  accessStatus(): Promise<AccessStatus>;
+  listAllowedEmails(): Promise<string[]>;
+  setAllowedEmails(emails: string[]): Promise<void>;
   listClasses(): Promise<ClassRoom[]>;
   saveClass(input: ClassInput): Promise<void>;
   listStudents(): Promise<Student[]>;
