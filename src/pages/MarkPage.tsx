@@ -80,7 +80,7 @@ export function MarkPage() {
 
   return (
     <div className="stack">
-      <Link to="/search">חזרה לחיפוש</Link>
+      <Link className="back-link" to="/search">חזרה לחיפוש</Link>
       <div>
         <h1>{studentName(student.firstName, student.lastName)}</h1>
         <p className="muted">{className}</p>

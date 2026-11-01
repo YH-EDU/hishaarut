@@ -32,7 +32,9 @@ export function AccountPage() {
 
   return (
     <div className="stack">
-      <h1>החשבון שלי</h1>
+      <header className="page-head">
+        <h1>החשבון שלי</h1>
+      </header>
       <p className="muted">{profile.email}</p>
       <p>{profile.role ? ROLE_LABEL[profile.role] : "ממתין לאישור"}</p>
       {error ? <Banner tone="danger">{error}</Banner> : null}

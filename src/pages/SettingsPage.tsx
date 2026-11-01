@@ -32,7 +32,32 @@ export function SettingsPage() {
         {reasons.length === 0 ? (
           <EmptyState title="אין סיבות" detail="הוסיפו לפחות סיבה אחת, למשל הפרעה בשיעור." />
         ) : (
-          <div className="table-scroll">
+          <>
+          <div className="phone-only list">
+            {reasons.map((reason) => (
+              <div key={reason.id} className="person-card">
+                <span>
+                  <b>{reason.label}</b>
+                  <span className="muted">{reason.active ? "פעילה" : "מוסתרת"}</span>
+                </span>
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    void getApi()
+                      .saveReason({ ...reason, active: !reason.active })
+                      .then(async () => {
+                        setInfo("הסיבה עודכנה");
+                        await load();
+                      })
+                      .catch((err: unknown) => setError(err instanceof Error ? err.message : "השמירה נכשלה"))
+                  }
+                >
+                  {reason.active ? "הסתרה" : "הפעלה"}
+                </Button>
+              </div>
+            ))}
+          </div>
+          <div className="table-scroll desktop-only">
             <table className="data-table">
               <thead>
                 <tr>
@@ -67,6 +92,7 @@ export function SettingsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
         <div className="toolbar">
           <input value={label} placeholder="סיבה חדשה" onChange={(event) => setLabel(event.target.value)} />

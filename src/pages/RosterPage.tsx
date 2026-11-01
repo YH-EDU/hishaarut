@@ -5,13 +5,16 @@ import { GENDER_LABEL } from "../api/types";
 import { useAuth } from "../auth";
 import { ImportWizard } from "../components/ImportWizard";
 import { EmptyState, PageHeader } from "../components/PageHeader";
+import { Sheet } from "../components/Sheet";
 import { Banner, Button, Field } from "../components/ui";
 
 type SortKey = "name" | "className" | "phone";
 
 export function RosterPage() {
   const { session } = useAuth();
-  const managesAll = session?.profile.role === "admin" || session?.profile.role === "secretary";
+  const role = session?.profile.role;
+  const managesAll = role === "admin" || role === "secretary";
+  const canSeePhones = managesAll || role === "homeroom";
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [contacts, setContacts] = useState<StudentContact[]>([]);
@@ -23,9 +26,11 @@ export function RosterPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { parentName: string; parentPhone: string; parent2Phone: string }>>({});
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const visibleClasses = classes.filter(
-    (room) => managesAll || room.homeroomTeacherId === session?.userId,
+    (room) => managesAll || role === "teacher" || room.homeroomTeacherId === session?.userId,
   );
   const classNames = useMemo(() => new Map(classes.map((room) => [room.id, room.name])), [classes]);
   const contactMap = useMemo(() => new Map(contacts.map((contact) => [contact.studentId, contact])), [contacts]);
@@ -122,7 +127,7 @@ export function RosterPage() {
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
 
-      <section className="panel stack">
+      <section className="panel stack desktop-only">
         <h2>כיתות</h2>
         {visibleClasses.length === 0 ? (
           <EmptyState title="אין עדיין כיתות" detail="הוסיפו את הכיתה הראשונה, למשל ז׳1. רק אחר כך אפשר לייבא תלמידים." />
@@ -159,6 +164,7 @@ export function RosterPage() {
         ) : null}
       </section>
 
+      <div className="desktop-only">
       <ImportWizard
         classes={visibleClasses}
         students={students.filter((student) => visibleClasses.some((room) => room.id === student.classId))}
@@ -169,10 +175,11 @@ export function RosterPage() {
           await load();
         }}
       />
+      </div>
 
-      <section className="panel stack">
-        <h2>תלמידים</h2>
-        <div className="toolbar">
+      <section className="stack">
+        <h2 className="desktop-only">תלמידים</h2>
+        <div className="toolbar sticky-search">
           <input value={query} placeholder="חיפוש לפי שם, כיתה או טלפון" onChange={(event) => setQuery(event.target.value)} />
           <select value={classId} onChange={(event) => setClassId(event.target.value)}>
             <option value="">כל הכיתות</option>
@@ -188,7 +195,25 @@ export function RosterPage() {
         ) : rows.length === 0 ? (
           <EmptyState title="אין תוצאות לחיפוש" detail="נסו שם אחר, או בחרו כל הכיתות." />
         ) : (
-          <div className="table-scroll">
+          <>
+          <div className="phone-only list">
+            {rows.map((student) => {
+              const contact = contactMap.get(student.id);
+              const hasPhone = Boolean(contact?.parentPhone || contact?.parent2Phone);
+              return (
+                <button key={student.id} type="button" className="person-card" onClick={() => setOpenId(student.id)}>
+                  <span>
+                    <b>
+                      {student.firstName} {student.lastName}
+                    </b>
+                    <span className="muted">{classNames.get(student.classId)}</span>
+                  </span>
+                  <span className="badge">{canSeePhones ? (hasPhone ? "יש טלפון" : "אין טלפון") : "טלפון מוסתר"}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="table-scroll desktop-only">
             <table className="data-table">
               <thead>
                 <tr>
@@ -263,8 +288,99 @@ export function RosterPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
+      {openId ? (
+        <Sheet full title="פרטי תלמיד" onClose={() => setOpenId(null)}>
+          {rows.filter((student) => student.id === openId).map((student) => {
+            const draft = draftFor(student);
+            return (
+              <div key={student.id} className="stack">
+                <p>
+                  <strong>
+                    {student.firstName} {student.lastName}
+                  </strong>
+                  <br />
+                  <span className="muted">{classNames.get(student.classId)}</span>
+                </p>
+                {managesAll || session?.profile.role === "homeroom" ? (
+                  <>
+                    <Field label="שם הורה">
+                      <input
+                        value={draft.parentName}
+                        onChange={(event) =>
+                          setDrafts((current) => ({ ...current, [student.id]: { ...draft, parentName: event.target.value } }))
+                        }
+                      />
+                    </Field>
+                    <Field label="טלפון הורה">
+                      <input
+                        className="ltr"
+                        inputMode="tel"
+                        value={draft.parentPhone}
+                        onChange={(event) =>
+                          setDrafts((current) => ({ ...current, [student.id]: { ...draft, parentPhone: event.target.value } }))
+                        }
+                      />
+                    </Field>
+                    <Field label="טלפון הורה 2">
+                      <input
+                        className="ltr"
+                        inputMode="tel"
+                        value={draft.parent2Phone}
+                        onChange={(event) =>
+                          setDrafts((current) => ({ ...current, [student.id]: { ...draft, parent2Phone: event.target.value } }))
+                        }
+                      />
+                    </Field>
+                    <Button
+                      onClick={() =>
+                        void saveRow(student).then(() => setOpenId(null))
+                      }
+                    >
+                      שמירה
+                    </Button>
+                  </>
+                ) : (
+                  <p className="muted">אפשר לסמן את התלמיד להשארות ממסך הסימון.</p>
+                )}
+              </div>
+            );
+          })}
+        </Sheet>
+      ) : null}
+      {managesAll ? (
+        <div className="phone-only">
+          <Button variant="ghost" block onClick={() => setToolsOpen(true)}>
+            כיתות וייבוא
+          </Button>
+        </div>
+      ) : null}
+      {toolsOpen ? (
+        <Sheet title="כיתות וייבוא" onClose={() => setToolsOpen(false)}>
+          <div className="stack">
+            <div className="toolbar">
+              <input value={className} placeholder="שם כיתה, למשל ז׳3" onChange={(event) => setClassName(event.target.value)} />
+              <Button disabled={!className.trim()} onClick={() => void addClass()}>
+                הוספת כיתה
+              </Button>
+            </div>
+            <ImportWizard
+              classes={visibleClasses}
+              students={students}
+              contacts={contacts}
+              canCreateClasses={managesAll}
+              onImported={async (message) => {
+                setInfo(message);
+                setToolsOpen(false);
+                await load();
+              }}
+            />
+          </div>
+        </Sheet>
+      ) : null}
+      <div className="desktop-only">
       {visibleClasses[0] ? (
         <AddStudent
           classes={visibleClasses}
@@ -274,6 +390,7 @@ export function RosterPage() {
           }}
         />
       ) : null}
+    </div>
     </div>
   );
 }

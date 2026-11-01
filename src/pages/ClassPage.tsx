@@ -48,7 +48,9 @@ export function ClassPage() {
   if (!selected) {
     return (
       <div className="stack">
-        <h1>כיתות</h1>
+        <header className="page-head">
+          <h1>כיתות</h1>
+        </header>
         {mine.length === 0 ? <Empty>עוד לא שויכה אליכם כיתה. בקשו ממנהל המערכת לשייך.</Empty> : null}
         <div className="list">
           {mine.map((room) => (
