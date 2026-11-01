@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>השארות</title>
+    <script>
+      (function () {
+        var parts = location.pathname.split("/").filter(Boolean);
+        var base = "/";
+        if (location.hostname.endsWith("github.io") && parts.length) {
+          base = "/" + parts[0] + "/";
+        }
+        try {
+          sessionStorage.setItem("hishaarut-gh-redirect", location.pathname + location.search + location.hash);
+        } catch (e) {}
+        location.replace(base);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

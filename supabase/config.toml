@@ -1,0 +1,6 @@
+# Minimal Supabase CLI config so `supabase db push` and function deploys
+# have a project id to attach to. Link the project before using the CLI.
+project_id = "hishaarut"
+
+[functions.send-whatsapp]
+verify_jwt = true
