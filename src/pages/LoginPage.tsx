@@ -24,10 +24,8 @@ export function LoginPage() {
 
   return (
     <div className="login">
-      <div className="mark" aria-hidden>
-        ש
-      </div>
-      <h1>השארות</h1>
+      <img className="app-icon" src={`${import.meta.env.BASE_URL}icons/icon-192.png`} alt="" width={72} height={72} />
+      <h1>נשארים</h1>
       <p className="muted">סימון מהיר של תלמידים שנשארים אחרי שעות הלימודים, ומעקב של המזכירות עד היציאה הביתה.</p>
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {api.isDemo ? (
@@ -49,6 +47,26 @@ export function LoginPage() {
           {busy ? "עוברים לגוגל…" : "כניסה עם חשבון גוגל"}
         </Button>
       )}
+    </div>
+  );
+}
+
+export function DeniedPage() {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="login">
+      <h1>אין גישה</h1>
+      <p>החשבון הזה לא נמצא בדומיין של בית הספר ולא ברשימת המיילים המורשים. אין גישה לנתוני התלמידים.</p>
+      <Button
+        variant="ghost"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void getApi().signOut();
+        }}
+      >
+        יציאה
+      </Button>
     </div>
   );
 }
@@ -76,7 +94,7 @@ export function PendingPage() {
 export function SetupMissingPage() {
   return (
     <div className="login">
-      <h1>השארות</h1>
+      <h1>נשארים</h1>
       <Banner tone="warn">חסרים פרטי החיבור ל-Supabase. מלאו את הקובץ .env לפי .env.example, ואז הריצו מחדש.</Banner>
       <p>ההסבר המלא נמצא בקובץ SETUP.md: יצירת הפרויקט, התחברות גוגל, והפיכת המשתמש הראשון למנהל.</p>
     </div>

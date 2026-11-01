@@ -31,6 +31,7 @@ interface ProfileRow {
 interface SettingsRow {
   school_name: string;
   allowed_email_domain: string | null;
+  allowed_domain?: string | null;
   notification_mode: SchoolSettings["notificationMode"];
   whatsapp_phone_number_id: string | null;
   whatsapp_display_number: string | null;
@@ -141,7 +142,7 @@ function mapProfile(row: ProfileRow): Profile {
 function mapSettings(row: SettingsRow): SchoolSettings {
   return {
     schoolName: row.school_name,
-    allowedEmailDomain: row.allowed_email_domain,
+    allowedEmailDomain: row.allowed_domain ?? row.allowed_email_domain,
     notificationMode: row.notification_mode,
     whatsappPhoneNumberId: row.whatsapp_phone_number_id,
     whatsappDisplayNumber: row.whatsapp_display_number,
@@ -326,7 +327,7 @@ export const supabaseApi: AppApi = {
     const { data, error } = await client()
       .from("school_settings")
       .select(
-        "school_name, allowed_email_domain, notification_mode, whatsapp_phone_number_id, whatsapp_display_number",
+        "school_name, allowed_email_domain, allowed_domain, notification_mode, whatsapp_phone_number_id, whatsapp_display_number",
       )
       .eq("id", 1)
       .single();
@@ -340,6 +341,7 @@ export const supabaseApi: AppApi = {
       .update({
         school_name: patch.schoolName,
         allowed_email_domain: patch.allowedEmailDomain,
+        allowed_domain: patch.allowedEmailDomain,
         notification_mode: patch.notificationMode,
         whatsapp_phone_number_id: patch.whatsappPhoneNumberId,
         whatsapp_display_number: patch.whatsappDisplayNumber,
@@ -347,6 +349,24 @@ export const supabaseApi: AppApi = {
       .eq("id", 1)
       .select("id");
     requireRows(data as { id: string }[] | null, error);
+  },
+
+  async accessStatus() {
+    const { data, error } = await client().rpc("my_access_status");
+    if (error) throw asError(error);
+    if (data === "ok" || data === "pending" || data === "denied") return data;
+    return "denied";
+  },
+
+  async listAllowedEmails() {
+    const { data, error } = await client().rpc("list_allowed_emails");
+    if (error) throw asError(error);
+    return ((data ?? []) as { email: string }[]).map((row) => row.email);
+  },
+
+  async setAllowedEmails(emails) {
+    const { error } = await client().rpc("set_allowed_emails", { p_emails: emails });
+    if (error) throw asError(error);
   },
 
   async listClasses() {

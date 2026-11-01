@@ -14,22 +14,22 @@ export default defineConfig(({ mode }) => {
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "robots.txt", "templates/students-template.csv"],
+      includeAssets: ["favicon.png", "robots.txt", "templates/students-template.csv"],
       manifest: {
-        name: "השארות",
-        short_name: "השארות",
+        name: "נשארים",
+        short_name: "נשארים",
         description: "ניהול השארות אחרי שעות הלימודים",
         lang: "he",
         dir: "rtl",
         display: "standalone",
-        background_color: "#f3f0e8",
-        theme_color: "#0f6b4c",
+        background_color: "#007285",
+        theme_color: "#007285",
         start_url: ".",
         scope: ".",
         icons: [
           { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },
-          { src: "icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {

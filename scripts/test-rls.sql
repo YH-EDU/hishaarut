@@ -457,25 +457,64 @@ begin
   end if;
 end $$;
 
--- Domain lock rejects a new Google account. Existing users stay.
--- Clear the test JWT so this runs as the database owner, like the SQL editor.
+-- Domain or allowlist, checked on every request. Off until one of them is set.
 select set_config('request.jwt.claim.sub', '', false);
-update public.school_settings set allowed_email_domain = 'school.test' where id = 1;
+update public.school_settings
+set allowed_email_domain = 'school.test', allowed_domain = 'school.test'
+where id = 1;
+insert into auth.users (id, email, raw_user_meta_data)
+values
+  ('30000000-0000-0000-0000-000000000099', 'person@gmail.com', '{}'),
+  ('30000000-0000-0000-0000-000000000098', 'person@school.test', '{"name":"תלמיד מורה"}');
+update public.profiles set role = 'teacher' where id = '30000000-0000-0000-0000-000000000099';
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000099', false);
+set role authenticated;
 do $$
+declare
+  n int;
 begin
-  begin
-    insert into auth.users (id, email, raw_user_meta_data)
-    values ('30000000-0000-0000-0000-000000000099', 'person@gmail.com', '{}');
-    raise exception 'foreign domain was accepted';
-  exception
-    when others then
-      if sqlerrm not like '%הדומיין של חשבון הגוגל אינו מורשה%' then
-        raise;
-      end if;
-  end;
-  insert into auth.users (id, email, raw_user_meta_data)
-  values ('30000000-0000-0000-0000-000000000098', 'person@school.test', '{"name":"תלמיד מורה"}');
+  if public.my_access_status() <> 'denied' then
+    raise exception 'gmail account should be denied';
+  end if;
+  select count(*) into n from public.students;
+  if n <> 0 then
+    raise exception 'denied user read students';
+  end if;
 end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+declare
+  n int;
+begin
+  select count(*) into n from public.students;
+  if n <> 0 then
+    raise exception 'teacher outside the domain still read students';
+  end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '', false);
+select public.set_allowed_emails(array['teacher@example.test']);
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+declare
+  n int;
+begin
+  select count(*) into n from public.students;
+  if n = 0 then
+    raise exception 'allowlisted teacher was blocked';
+  end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '', false);
+update public.school_settings set allowed_domain = null, allowed_email_domain = null where id = 1;
+select public.set_allowed_emails(array[]::text[]);
 
 -- Anon has no table access and cannot call the contact RPC.
 set role anon;

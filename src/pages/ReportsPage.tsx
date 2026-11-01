@@ -17,7 +17,7 @@ export function ReportsPage() {
   const [rows, setRows] = useState<Detention[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [reasons, setReasons] = useState<Reason[]>([]);
-  const [school, setSchool] = useState("השארות");
+  const [school, setSchool] = useState("נשארים");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
