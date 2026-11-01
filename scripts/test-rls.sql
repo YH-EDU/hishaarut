@@ -675,3 +675,92 @@ begin
     raise exception 'secretary class assignment did not stick';
   end if;
 end $$;
+
+-- Secretary can archive, and can delete only when nothing references the row.
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000004', false);
+set role authenticated;
+do $$
+declare
+  n int;
+begin
+  update public.students set active = false where id = '20000000-0000-0000-0000-000000000014';
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'secretary could not archive a student';
+  end if;
+
+  update public.students set active = true where id = '20000000-0000-0000-0000-000000000014';
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'secretary could not restore a student';
+  end if;
+
+  update public.classes set active = false where name = 'ז׳9';
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'secretary could not archive a class';
+  end if;
+
+  delete from public.students where id = '20000000-0000-0000-0000-000000000015';
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'secretary could not delete a student without detentions';
+  end if;
+
+  begin
+    delete from public.students where id = '20000000-0000-0000-0000-000000000001';
+    raise exception 'secretary deleted a student who has detentions';
+  exception
+    when foreign_key_violation then
+      null;
+  end;
+
+  delete from public.classes where name = 'ז׳9';
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'secretary could not delete an empty class';
+  end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+declare
+  n int;
+begin
+  update public.students set active = false where id = '20000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception 'teacher archived a student';
+  end if;
+
+  delete from public.students where id = '20000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception 'teacher deleted a student';
+  end if;
+
+  delete from public.classes where id = '10000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception 'teacher deleted a class';
+  end if;
+end $$;
+reset role;
+
+do $$
+begin
+  if (select active from public.students where id = '20000000-0000-0000-0000-000000000014') is distinct from true then
+    raise exception 'student restore did not stick';
+  end if;
+  if exists (select 1 from public.students where id = '20000000-0000-0000-0000-000000000015') then
+    raise exception 'deleted student is still there';
+  end if;
+  if not exists (select 1 from public.students where id = '20000000-0000-0000-0000-000000000001') then
+    raise exception 'student with detentions was removed';
+  end if;
+  if (select active from public.students where id = '20000000-0000-0000-0000-000000000002') is distinct from true then
+    raise exception 'teacher archive stuck';
+  end if;
+end $$;

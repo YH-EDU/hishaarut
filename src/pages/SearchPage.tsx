@@ -43,8 +43,10 @@ export function SearchPage() {
   useEffect(() => {
     void Promise.all([getApi().listStudents(), getApi().listClasses()])
       .then(([nextStudents, nextClasses]) => {
-        setStudents(nextStudents.filter((student) => student.active));
-        setClasses(nextClasses.filter((room) => room.active));
+        const activeClasses = nextClasses.filter((room) => room.active);
+        const activeClassIds = new Set(activeClasses.map((room) => room.id));
+        setStudents(nextStudents.filter((student) => student.active && activeClassIds.has(student.classId)));
+        setClasses(activeClasses);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "אירעה שגיאה"));
   }, []);

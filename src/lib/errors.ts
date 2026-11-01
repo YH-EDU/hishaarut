@@ -1,4 +1,7 @@
 export function hebrewError(message: string): string {
+  if (/foreign key|violates foreign key constraint|23503/i.test(message)) {
+    return "אי אפשר למחוק כי יש השארות רשומות. אפשר להעביר לארכיון במקום.";
+  }
   if (/row-level security|permission denied/i.test(message)) return "אין הרשאה לפעולה הזו";
   if (message.includes("students_unique_name")) return "תלמיד עם אותו שם כבר קיים בכיתה";
   if (message.includes("classes_name")) return "כיתה בשם הזה כבר קיימת";

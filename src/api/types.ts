@@ -160,9 +160,14 @@ export interface AppApi {
   setAllowedEmails(emails: string[]): Promise<void>;
   listClasses(): Promise<ClassRoom[]>;
   saveClass(input: ClassInput): Promise<void>;
+  setClassActive(id: string, active: boolean, includeStudents: boolean): Promise<void>;
+  deleteClass(id: string): Promise<void>;
   listStudents(): Promise<Student[]>;
   listContacts(): Promise<StudentContact[]>;
   saveStudent(input: StudentInput): Promise<void>;
+  countDetentions(studentIds: string[]): Promise<number>;
+  setStudentsActive(ids: string[], active: boolean): Promise<void>;
+  deleteStudent(id: string): Promise<void>;
   listReasons(): Promise<Reason[]>;
   saveReason(input: ReasonInput): Promise<void>;
   listProfiles(): Promise<Profile[]>;
