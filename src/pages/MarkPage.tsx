@@ -15,6 +15,7 @@ export function MarkPage() {
   const { session } = useAuth();
   const [student, setStudent] = useState<Student | null>(null);
   const [className, setClassName] = useState("");
+  const [classActive, setClassActive] = useState(true);
   const [reasons, setReasons] = useState<Reason[]>([]);
   const [existing, setExisting] = useState<Detention[]>([]);
   const [reasonId, setReasonId] = useState<string | "other" | "">("");
@@ -35,8 +36,10 @@ export function MarkPage() {
           getApi().listDetentions({ date: jerusalemToday() }),
         ]);
         const found = students.find((item) => item.id === id) ?? null;
+        const room = classes.find((item) => item.id === found?.classId);
         setStudent(found);
-        setClassName(classes.find((room) => room.id === found?.classId)?.name ?? "");
+        setClassName(room?.name ?? "");
+        setClassActive(room?.active ?? false);
         const active = reasonRows.filter((reason) => reason.active);
         setReasons(active);
         if (active.length === 0) setReasonId("other");
@@ -77,6 +80,28 @@ export function MarkPage() {
 
   if (!student && !error) return <p>טוען…</p>;
   if (!student) return <Banner tone="danger">{error ?? "התלמיד לא נמצא"}</Banner>;
+  if (!student.active) {
+    return (
+      <div className="stack">
+        <Link className="back-link" to="/search">
+          חזרה לחיפוש
+        </Link>
+        <h1>{studentName(student.firstName, student.lastName)}</h1>
+        <Banner tone="warn">התלמיד בארכיון ולא ניתן לסמן אותו. ההיסטוריה נשארת בדוחות.</Banner>
+      </div>
+    );
+  }
+  if (!classActive) {
+    return (
+      <div className="stack">
+        <Link className="back-link" to="/search">
+          חזרה לחיפוש
+        </Link>
+        <h1>{studentName(student.firstName, student.lastName)}</h1>
+        <Banner tone="warn">הכיתה בארכיון ולא ניתן לסמן ממנה. ההיסטוריה נשארת בדוחות.</Banner>
+      </div>
+    );
+  }
 
   return (
     <div className="stack">

@@ -1,3 +1,4 @@
+import { blockedDeleteMessage } from "../lib/archive";
 import { asError } from "../lib/errors";
 import { pagesRedirectUrl } from "../lib/supabaseKey";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
@@ -244,6 +245,20 @@ function requireRows<T extends { id: string }>(data: T[] | null, error: { messag
   return data;
 }
 
+function isForeignKey(error: { message: string } | null): boolean {
+  return Boolean(error && /foreign key|23503|restrict/i.test(error.message));
+}
+
+async function queryDetentionCount(studentIds: string[]): Promise<number> {
+  if (studentIds.length === 0) return 0;
+  const { count, error } = await client()
+    .from("detentions")
+    .select("id", { count: "exact", head: true })
+    .in("student_id", studentIds);
+  if (error) throw asError(error);
+  return count ?? 0;
+}
+
 export const supabaseApi: AppApi = {
   isConfigured: isSupabaseConfigured,
   isDemo: false,
@@ -394,6 +409,34 @@ export const supabaseApi: AppApi = {
     if (error) throw asError(error);
   },
 
+  async setClassActive(id, active, includeStudents) {
+    const { data, error } = await client().from("classes").update({ active }).eq("id", id).select("id");
+    requireRows(data as { id: string }[] | null, error);
+    if (!includeStudents) return;
+    const { error: studentError } = await client().from("students").update({ active }).eq("class_id", id);
+    if (studentError) throw asError(studentError);
+  },
+
+  async deleteClass(id) {
+    const { data: room, error } = await client().from("classes").select("id, name").eq("id", id).maybeSingle();
+    if (error) throw asError(error);
+    if (!room) throw new Error("הכיתה לא נמצאה");
+    const name = `כיתה ${(room as { name: string }).name}`;
+    const { data: kids, error: kidsError } = await client().from("students").select("id").eq("class_id", id);
+    if (kidsError) throw asError(kidsError);
+    const ids = ((kids ?? []) as { id: string }[]).map((kid) => kid.id);
+    if ((await queryDetentionCount(ids)) > 0) throw new Error(blockedDeleteMessage(name));
+    if (ids.length > 0) {
+      const { data: removed, error: deleteKids } = await client().from("students").delete().in("id", ids).select("id");
+      if (isForeignKey(deleteKids)) throw new Error(blockedDeleteMessage(name));
+      if (deleteKids) throw asError(deleteKids);
+      if ((removed?.length ?? 0) !== ids.length) throw new Error("אין הרשאה לפעולה הזו");
+    }
+    const { data: removedClass, error: deleteRoom } = await client().from("classes").delete().eq("id", id).select("id");
+    if (isForeignKey(deleteRoom)) throw new Error(blockedDeleteMessage(name));
+    requireRows(removedClass as { id: string }[] | null, deleteRoom);
+  },
+
   async listStudents() {
     const { data, error } = await client()
       .from("students")
@@ -445,6 +488,33 @@ export const supabaseApi: AppApi = {
     }
     const { error } = await client().from("students").insert(payload);
     if (error) throw asError(error);
+  },
+
+  async countDetentions(studentIds) {
+    return queryDetentionCount(studentIds);
+  },
+
+  async setStudentsActive(ids, active) {
+    if (ids.length === 0) return;
+    const { data, error } = await client().from("students").update({ active }).in("id", ids).select("id");
+    const rows = requireRows(data as { id: string }[] | null, error);
+    if (rows.length !== ids.length) throw new Error("אין הרשאה לפעולה הזו");
+  },
+
+  async deleteStudent(id) {
+    const { data: student, error } = await client()
+      .from("students")
+      .select("id, first_name, last_name")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw asError(error);
+    if (!student) throw new Error("התלמיד לא נמצא");
+    const row = student as { first_name: string; last_name: string };
+    const name = `${row.first_name} ${row.last_name}`;
+    if ((await queryDetentionCount([id])) > 0) throw new Error(blockedDeleteMessage(name));
+    const { data, error: deleteError } = await client().from("students").delete().eq("id", id).select("id");
+    if (isForeignKey(deleteError)) throw new Error(blockedDeleteMessage(name));
+    requireRows(data as { id: string }[] | null, deleteError);
   },
 
   async listReasons() {

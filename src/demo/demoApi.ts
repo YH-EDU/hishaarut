@@ -1,3 +1,4 @@
+import { blockedDeleteMessage } from "../lib/archive";
 import { jerusalemToday } from "../lib/dates";
 import { renderDetentionMessage } from "../lib/messages";
 import { normalizeIlPhone } from "../lib/phone";
@@ -146,6 +147,12 @@ function emitSession() {
 function emitChange() {
   persist();
   changeListeners.forEach((listener) => listener());
+}
+
+function requireManager(): Profile {
+  const profile = requireUser();
+  if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("אין הרשאה לפעולה הזו");
+  return profile;
 }
 
 function requireUser(): Profile {
@@ -361,6 +368,33 @@ export const demoApi: AppApi = {
     emitChange();
   },
 
+  async setClassActive(id, active, includeStudents) {
+    requireManager();
+    const room = state.classes.find((item) => item.id === id);
+    if (!room) throw new Error("הכיתה לא נמצאה");
+    room.active = active;
+    if (includeStudents) {
+      state.students.forEach((student) => {
+        if (student.classId === id) student.active = active;
+      });
+    }
+    emitChange();
+  },
+
+  async deleteClass(id) {
+    requireManager();
+    const room = state.classes.find((item) => item.id === id);
+    if (!room) throw new Error("הכיתה לא נמצאה");
+    const kids = state.students.filter((student) => student.classId === id);
+    const blocked = kids.some((student) => state.detentions.some((detention) => detention.studentId === student.id));
+    if (blocked) throw new Error(blockedDeleteMessage(`כיתה ${room.name}`));
+    const gone = new Set(kids.map((student) => student.id));
+    state.students = state.students.filter((student) => !gone.has(student.id));
+    gone.forEach((studentId) => delete state.contacts[studentId]);
+    state.classes = state.classes.filter((item) => item.id !== id);
+    emitChange();
+  },
+
   async listStudents() {
     const profile = requireUser();
     if (!isStaff(profile)) return [];
@@ -420,6 +454,37 @@ export const demoApi: AppApi = {
         nationalId: input.nationalId?.trim() || null,
       };
     }
+    emitChange();
+  },
+
+  async countDetentions(studentIds) {
+    requireUser();
+    const ids = new Set(studentIds);
+    return state.detentions.filter((detention) => ids.has(detention.studentId)).length;
+  },
+
+  async setStudentsActive(ids, active) {
+    requireManager();
+    const wanted = new Set(ids);
+    let found = 0;
+    state.students.forEach((student) => {
+      if (!wanted.has(student.id)) return;
+      student.active = active;
+      found += 1;
+    });
+    if (ids.length > 0 && found !== ids.length) throw new Error("התלמיד לא נמצא");
+    emitChange();
+  },
+
+  async deleteStudent(id) {
+    requireManager();
+    const student = state.students.find((item) => item.id === id);
+    if (!student) throw new Error("התלמיד לא נמצא");
+    if (state.detentions.some((detention) => detention.studentId === id)) {
+      throw new Error(blockedDeleteMessage(`${student.firstName} ${student.lastName}`));
+    }
+    state.students = state.students.filter((item) => item.id !== id);
+    delete state.contacts[id];
     emitChange();
   },
 

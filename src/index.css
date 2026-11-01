@@ -265,6 +265,15 @@ details.preview pre { white-space: pre-wrap; font: inherit; margin: 8px 0 0; }
   overflow: auto;
 }
 .sheet-full { top: 0; border-radius: 0; max-height: none; padding-top: env(safe-area-inset-top); }
+.confirm-sheet { max-height: none; }
+.check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+}
+.check-row input[type="checkbox"] { width: 22px; height: 22px; min-height: 22px; accent-color: var(--primary); }
 .back-link { display: inline-flex; align-items: center; min-height: 44px; font-weight: 650; }
 .sheet-bar { display: flex; align-items: center; justify-content: space-between; min-height: 52px; position: sticky; top: 0; background: #fffdf8; }
 .sheet-close { min-height: 44px; min-width: 44px; border: 0; background: transparent; color: var(--primary-dark); font-weight: 700; }
@@ -373,6 +382,16 @@ details.preview pre { white-space: pre-wrap; font: inherit; margin: 8px 0 0; }
   html:not(.standalone) .main { padding: 8px 28px 40px; }
   html:not(.standalone) .topbar { background: transparent; position: static; min-height: 52px; padding: 8px 0; }
   html:not(.standalone) .sticky-search { position: static; background: transparent; }
+  html:not(.standalone) .confirm-sheet {
+    top: 12vh;
+    bottom: auto;
+    inset-inline: auto;
+    left: 50%;
+    width: min(440px, calc(100% - 32px));
+    transform: translateX(-50%);
+    border-radius: 22px;
+    padding-bottom: 16px;
+  }
 }
 
 @media print {

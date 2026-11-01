@@ -19,6 +19,7 @@ export function ClassPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const managesAll = role === "admin" || role === "secretary";
   const mine = classes.filter((room) => managesAll || room.homeroomTeacherId === session?.userId);
@@ -40,8 +41,8 @@ export function ClassPage() {
   }, []);
 
   const roster = useMemo(
-    () => students.filter((student) => student.classId === selected?.id),
-    [students, selected?.id],
+    () => students.filter((student) => student.classId === selected?.id && (showArchived || student.active)),
+    [students, selected?.id, showArchived],
   );
   const contactMap = useMemo(() => new Map(contacts.map((contact) => [contact.studentId, contact])), [contacts]);
 
@@ -85,6 +86,10 @@ export function ClassPage() {
           await load();
         }}
       />
+      <label className="check-row">
+        <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
+        הצגת ארכיון
+      </label>
       <div className="list">
         {roster.map((student) => {
           const contact = contactMap.get(student.id);
