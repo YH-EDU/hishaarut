@@ -5,7 +5,6 @@ import type { AccessStatus, Role } from "./api/types";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { AccountPage } from "./pages/AccountPage";
-import { ClassPage } from "./pages/ClassPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DeniedPage, Forbidden, LoginPage, PendingPage, SetupMissingPage } from "./pages/LoginPage";
 import { MarkPage } from "./pages/MarkPage";
@@ -17,9 +16,6 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { StaffPage } from "./pages/StaffPage";
 
 function Home() {
-  const { session } = useAuth();
-  const role = session?.profile.role;
-  if (role === "secretary" || role === "admin") return <Navigate to="/dashboard" replace />;
   return <Navigate to="/search" replace />;
 }
 
@@ -88,23 +84,16 @@ function SignedIn({ sessionRole }: { sessionRole: Role | null }) {
             </Allow>
           }
         />
+        <Route path="class" element={<Navigate to="/roster" replace />} />
+        <Route path="class/:classId" element={<Navigate to="/roster" replace />} />
         <Route
-          path="class"
+          path="reports"
           element={
             <Allow roles={["homeroom", "secretary", "admin"]}>
-              <ClassPage />
+              <ReportsPage />
             </Allow>
           }
         />
-        <Route
-          path="class/:classId"
-          element={
-            <Allow roles={["homeroom", "secretary", "admin"]}>
-              <ClassPage />
-            </Allow>
-          }
-        />
-        <Route path="reports" element={<ReportsPage />} />
         <Route
           path="roster"
           element={

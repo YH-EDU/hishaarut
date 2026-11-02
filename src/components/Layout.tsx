@@ -13,31 +13,36 @@ interface NavItem {
 }
 
 function desktopNav(role: Role): Array<{ to: string; label: string }> {
-  const releases = { to: "/dashboard", label: "שחרורים" };
   const mark = { to: "/search", label: "סימון תלמיד" };
-  const mine = { to: "/mine", label: "הסימונים שלי" };
+  const releases = { to: "/dashboard", label: "שחרורים" };
   const students = { to: "/roster", label: "תלמידים וכיתות" };
-  const ownClass = { to: "/class", label: "הכיתה שלי" };
   const staff = { to: "/staff", label: "צוות" };
   const reports = { to: "/reports", label: "דוחות" };
   const settings = { to: "/settings", label: "הגדרות" };
-  if (role === "admin") return [releases, students, staff, mark, reports, settings];
-  if (role === "secretary") return [releases, students, mark, staff, reports];
-  if (role === "homeroom") return [releases, mark, ownClass, mine];
-  return [releases, mark, mine];
+  if (role === "admin") return [mark, releases, students, staff, reports, settings];
+  if (role === "secretary") return [mark, releases, students, staff, reports];
+  if (role === "homeroom") return [mark, releases, students, reports];
+  return [mark, releases];
 }
 
 function phoneTabs(role: Role): NavItem[] {
-  const releases = { to: "/dashboard", label: "שחרורים", icon: "release" as const };
-  const today = { to: "/mine", label: "היום", icon: "today" as const };
   const mark = { to: "/search", label: "סימון", icon: "mark" as const };
-  const ownClass = { to: "/class", label: "הכיתה שלי", icon: "students" as const };
+  const releases = { to: "/dashboard", label: "שחרורים", icon: "release" as const };
   const students = { to: "/roster", label: "תלמידים", icon: "students" as const };
-  const account = { to: "/account", label: "החשבון", icon: "account" as const };
   const more = { to: "#more", label: "עוד", icon: "more" as const };
-  if (role === "admin" || role === "secretary") return [releases, students, mark, more];
-  if (role === "homeroom") return [mark, releases, ownClass, today, account];
-  return [mark, releases, today, account];
+  if (role === "teacher") return [mark, releases, more];
+  return [mark, releases, students, more];
+}
+
+function moreLinksFor(role: Role): Array<{ to: string; label: string }> {
+  const staff = { to: "/staff", label: "צוות" };
+  const reports = { to: "/reports", label: "דוחות" };
+  const settings = { to: "/settings", label: "הגדרות" };
+  const account = { to: "/account", label: "החשבון" };
+  if (role === "admin") return [staff, reports, settings, account];
+  if (role === "secretary") return [staff, reports, account];
+  if (role === "homeroom") return [reports, account];
+  return [account];
 }
 
 function titleFor(pathname: string): string {
@@ -62,6 +67,7 @@ export function Layout() {
   const [school, setSchool] = useState("נשארים");
   const [moreOpen, setMoreOpen] = useState(false);
   const [readyCount, setReadyCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
   const showFab = pathname.startsWith("/roster") || pathname.startsWith("/mine");
 
   useEffect(() => {
@@ -86,6 +92,26 @@ export function Layout() {
   }, []);
 
   useEffect(() => {
+    if (role !== "admin" && role !== "secretary") return;
+    let stop = false;
+    const load = async () => {
+      try {
+        const profiles = await getApi().listProfiles();
+        const count = profiles.filter((profile) => !profile.role && profile.requestedRole).length;
+        if (!stop) setPendingCount(count);
+      } catch {
+        if (!stop) setPendingCount(0);
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 15000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, [role]);
+
+  useEffect(() => {
     void getApi()
       .getSettings()
       .then((settings) => setSchool(settings.schoolName))
@@ -103,12 +129,7 @@ export function Layout() {
     return () => queries.forEach((media) => media.removeEventListener("change", apply));
   }, []);
 
-  const moreLinks = [
-    { to: "/staff", label: "צוות" },
-    { to: "/reports", label: "דוחות" },
-    ...(role === "admin" ? [{ to: "/settings", label: "הגדרות" }] : []),
-    { to: "/account", label: "החשבון" },
-  ];
+  const moreLinks = moreLinksFor(role);
 
   return (
     <div className="app-shell">
@@ -122,6 +143,7 @@ export function Layout() {
             <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
               <span>{item.label}</span>
               {item.to === "/dashboard" ? <ReadyBadge count={readyCount} /> : null}
+              {item.to === "/staff" ? <ReadyBadge count={pendingCount} /> : null}
             </NavLink>
           ))}
         </nav>
@@ -168,7 +190,8 @@ export function Layout() {
           <div className="more-list">
             {moreLinks.map((item) => (
               <Link key={item.to} to={item.to} onClick={() => setMoreOpen(false)}>
-                {item.label}
+                <span>{item.label}</span>
+                {item.to === "/staff" ? <ReadyBadge count={pendingCount} /> : null}
               </Link>
             ))}
           </div>

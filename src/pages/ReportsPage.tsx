@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { getApi } from "../api";
 import type { ClassRoom, Detention, Reason } from "../api/types";
 import { STATUS_LABEL } from "../api/types";
+import { useAuth } from "../auth";
 import { PageHeader } from "../components/PageHeader";
 import { Banner, Button, Field, studentName } from "../components/ui";
 import { formatDate, jerusalemToday, shiftDate } from "../lib/dates";
 import { downloadText, downloadXlsx, reportToCsv, type ReportExportRow } from "../lib/exportReport";
 
 export function ReportsPage() {
+  const role = useAuth().session?.profile.role;
+  const userId = useAuth().session?.userId;
   const today = jerusalemToday();
   const [from, setFrom] = useState(shiftDate(today, -30));
   const [to, setTo] = useState(today);
@@ -35,7 +38,7 @@ export function ReportsPage() {
     setLoading(true);
     setError(null);
     try {
-      setRows(await getApi().listDetentions({ from, to }));
+      setRows(await getApi().listReport(from, to));
     } catch (err) {
       setError(err instanceof Error ? err.message : "הדוח נכשל");
     } finally {
@@ -100,7 +103,9 @@ export function ReportsPage() {
         <Field label="כיתה">
           <select value={classId} onChange={(event) => setClassId(event.target.value)}>
             <option value="">כל הכיתות</option>
-            {classes.map((room) => (
+            {classes
+              .filter((room) => role !== "homeroom" || room.homeroomTeacherId === userId)
+              .map((room) => (
               <option key={room.id} value={room.id}>
                 {room.name}
               </option>

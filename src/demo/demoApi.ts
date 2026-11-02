@@ -35,11 +35,12 @@ const STORAGE_KEY = "hishaarut-demo-v2";
 
 function seed(): DemoState {
   const profiles: Profile[] = [
-    { id: "demo-admin", email: "admin@school.test", fullName: "מנהלת בית הספר", phone: "050-7001001", role: "admin" },
-    { id: "demo-teacher", email: "teacher@school.test", fullName: "רונית מורה", phone: null, role: "teacher" },
-    { id: "demo-homeroom", email: "homeroom@school.test", fullName: "מיכל מחנכת", phone: "050-7111111", role: "homeroom" },
-    { id: "demo-secretary", email: "secretary@school.test", fullName: "דנה מזכירה", phone: "050-7222222", role: "secretary" },
-    { id: "demo-pending", email: "pending@school.test", fullName: "משתמש ממתין", phone: null, role: null },
+    { id: "demo-admin", email: "1003870383@school.test", fullName: "מנהלת בית הספר", phone: "050-7001001", role: "admin", requestedRole: null, requestedClassIds: [], isOwner: true },
+    { id: "demo-teacher", email: "teacher@school.test", fullName: "רונית מורה", phone: null, role: "teacher", requestedRole: null, requestedClassIds: [], isOwner: false },
+    { id: "demo-homeroom", email: "homeroom@school.test", fullName: "מיכל מחנכת", phone: "050-7111111", role: "homeroom", requestedRole: null, requestedClassIds: [], isOwner: false },
+    { id: "demo-secretary", email: "secretary@school.test", fullName: "דנה מזכירה", phone: "050-7222222", role: "secretary", requestedRole: null, requestedClassIds: [], isOwner: false },
+    { id: "demo-pending", email: "pending@school.test", fullName: "יונתן חדש", phone: null, role: null, requestedRole: "homeroom", requestedClassIds: ["c-z2"], isOwner: false },
+    { id: "demo-new", email: "new@school.test", fullName: "אדם חדש", phone: null, role: null, requestedRole: null, requestedClassIds: [], isOwner: false },
   ];
   const classes: ClassRoom[] = [
     { id: "c-z1", name: "ז׳1", grade: "ז", homeroomTeacherId: "demo-homeroom", active: true },
@@ -356,8 +357,13 @@ export const demoApi: AppApi = {
     throw new Error("במצב הדגמה נכנסים עם אחד התפקידים שעל המסך");
   },
 
-  async signInAs(role: Role | "pending") {
-    const match = state.profiles.find((profile) => (role === "pending" ? profile.role === null : profile.role === role));
+  async signInAs(role: Role | "pending" | "new") {
+    const match =
+      role === "new"
+        ? state.profiles.find((profile) => profile.id === "demo-new")
+        : role === "pending"
+          ? state.profiles.find((profile) => profile.id === "demo-pending")
+          : state.profiles.find((profile) => profile.role === role);
     if (!match) throw new Error("משתמש הדגמה לא נמצא");
     state.currentId = match.id;
     persist();
@@ -642,18 +648,20 @@ export const demoApi: AppApi = {
     const profile = requireUser();
     const target = state.profiles.find((item) => item.id === userId);
     if (!target) throw new Error("המשתמש לא נמצא");
+    if (target.isOwner && profile.id !== target.id) throw new Error("רק בעל המערכת יכול לשנות את הפרופיל שלו");
+    if (target.isOwner && role !== "admin") throw new Error("בעל המערכת נשאר מנהל");
     if (profile.role === "secretary") {
-      if (target.role === "admin" || role === "admin") {
-        throw new Error("מזכירות לא יכולה למנות או לשנות מנהל");
-      }
+      if (target.role === "admin" || role === "admin") throw new Error("מזכירות לא יכולה למנות או לשנות מנהל");
     } else if (profile.role !== "admin") {
-      throw new Error("רק מנהל יכול לשנות תפקיד");
+      throw new Error("אין הרשאה לשנות תפקיד");
     }
-    if (profile.role === "admin" && target.role === "admin" && role !== "admin") {
+    if (target.role === "admin" && role !== "admin") {
       const others = state.profiles.filter((item) => item.role === "admin" && item.id !== target.id);
       if (others.length === 0) throw new Error("אי אפשר להסיר את המנהל האחרון");
     }
     target.role = role;
+    target.requestedRole = null;
+    target.requestedClassIds = [];
     if (role !== "homeroom") {
       state.classes.forEach((room) => {
         if (room.homeroomTeacherId === target.id) room.homeroomTeacherId = null;
@@ -661,6 +669,70 @@ export const demoApi: AppApi = {
     }
     if (target.id === profile.id) emitSession();
     emitChange();
+  },
+
+  async listOpenClasses() {
+    requireUser();
+    return state.classes.filter((room) => room.active).map((room) => ({ id: room.id, name: room.name }));
+  },
+
+  async requestStaffRole(role, classIds) {
+    const profile = requireUser();
+    if (profile.role) throw new Error("כבר יש תפקיד לחשבון");
+    if (role !== "teacher" && role !== "homeroom") throw new Error("אפשר לבקש רק מורה מקצועי או מחנך");
+    if (role === "homeroom" && classIds.length === 0) throw new Error("מחנך בוחר כיתה קיימת");
+    profile.requestedRole = role;
+    profile.requestedClassIds = role === "homeroom" ? classIds : [];
+    emitSession();
+    emitChange();
+  },
+
+  async approveStaffRequest(userId, role, classIds) {
+    const profile = requireUser();
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל או מזכירות יכולים לאשר תפקיד");
+    await this.setUserRole(userId, role);
+    const target = state.profiles.find((item) => item.id === userId);
+    if (!target) return;
+    if (role === "homeroom") {
+      state.classes.forEach((room) => {
+        if (classIds.includes(room.id)) room.homeroomTeacherId = target.id;
+        else if (room.homeroomTeacherId === target.id) room.homeroomTeacherId = null;
+      });
+    }
+    emitChange();
+  },
+
+  async rejectStaffRequest(userId) {
+    const profile = requireUser();
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל או מזכירות יכולים לאשר תפקיד");
+    const target = state.profiles.find((item) => item.id === userId);
+    if (!target || target.isOwner) throw new Error("רק בעל המערכת יכול לשנות את הפרופיל שלו");
+    target.requestedRole = null;
+    target.requestedClassIds = [];
+    emitChange();
+  },
+
+  async transferOwnership(userId) {
+    const profile = requireUser();
+    if (!profile.isOwner) throw new Error("רק בעל המערכת יכול להעביר בעלות");
+    const next = state.profiles.find((item) => item.id === userId);
+    if (!next || next.role !== "admin" || next.id === profile.id) throw new Error("אפשר להעביר בעלות רק למנהל");
+    profile.isOwner = false;
+    next.isOwner = true;
+    emitSession();
+    emitChange();
+  },
+
+  async listReport(from, to) {
+    const profile = requireUser();
+    if (profile.role !== "homeroom" && profile.role !== "secretary" && profile.role !== "admin") {
+      throw new Error("אין הרשאה לדוח");
+    }
+    const own = new Set(state.classes.filter((room) => room.homeroomTeacherId === profile.id).map((room) => room.id));
+    return state.detentions
+      .filter((detention) => detention.detentionDate >= from && detention.detentionDate <= to)
+      .filter((detention) => profile.role === "homeroom" ? own.has(detention.classId) : true)
+      .map((detention) => ({ ...detention }));
   },
 
   async listDetentions(query: DetentionQuery) {
