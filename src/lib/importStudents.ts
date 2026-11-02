@@ -1,6 +1,6 @@
 import type { Gender } from "../api/types";
-import { classKey, parseCsv, parseGender } from "./csv";
-import { toE164 } from "./phone";
+import { classKey, displayClassName, parseCsv, parseGender } from "./csv";
+import { splitPhoneNumbers } from "./phone";
 
 export type ImportField =
   | "ignore"
@@ -8,12 +8,13 @@ export type ImportField =
   | "firstName"
   | "lastName"
   | "className"
-  | "nationalId"
   | "gender"
   | "parent1Name"
   | "parent1Phone"
   | "parent2Name"
   | "parent2Phone";
+
+export type NameOrder = "first-last" | "last-first";
 
 export const IMPORT_FIELD_LABEL: Record<ImportField, string> = {
   ignore: "לא לייבא",
@@ -21,12 +22,11 @@ export const IMPORT_FIELD_LABEL: Record<ImportField, string> = {
   firstName: "שם פרטי",
   lastName: "שם משפחה",
   className: "כיתה",
-  nationalId: "תעודת זהות",
   gender: "מגדר",
-  parent1Name: "שם הורה 1",
-  parent1Phone: "טלפון הורה 1",
-  parent2Name: "שם הורה 2",
-  parent2Phone: "טלפון הורה 2",
+  parent1Name: "שם האב",
+  parent1Phone: "טלפון האב",
+  parent2Name: "שם האם",
+  parent2Phone: "טלפון האם",
 };
 
 export interface SheetGrid {
@@ -51,14 +51,15 @@ export interface ImportPreviewRow {
   firstName: string;
   lastName: string;
   className: string;
-  nationalId: string;
   gender: Gender | null;
   parent1Name: string;
   parent1Phone: string;
   parent1E164: string | null;
+  parent1E164b: string | null;
   parent2Name: string;
   parent2Phone: string;
   parent2E164: string | null;
+  parent2E164b: string | null;
   issues: ImportIssue[];
 }
 
@@ -82,17 +83,12 @@ const HEADER_FIELDS: Array<[string, ImportField]> = [
   ["family name", "lastName"],
   ["כיתה", "className"],
   ["כתה", "className"],
+  ["כיתת אם", "className"],
+  ["כיתה אם", "className"],
+  ["כיתת אב", "className"],
   ["class name", "className"],
   ["classname", "className"],
   ["class", "className"],
-  ["תעודת זהות", "nationalId"],
-  ["מספר זהות", "nationalId"],
-  ["תז", "nationalId"],
-  ["ת ז", "nationalId"],
-  ["זהות", "nationalId"],
-  ["national id", "nationalId"],
-  ["student id", "nationalId"],
-  ["zehut", "nationalId"],
   ["מגדר", "gender"],
   ["מין", "gender"],
   ["gender", "gender"],
@@ -133,7 +129,31 @@ const HEADER_FIELDS: Array<[string, ImportField]> = [
   ["parent2 phone", "parent2Phone"],
 ];
 
-function normHeader(value: string): string {
+const IGNORED_HEADERS = new Set([
+  "מס",
+  "מספר",
+  "ת לידה",
+  "תאריך לידה",
+  "רחוב",
+  "מס בית",
+  "מספר בית",
+  "תאור ישוב",
+  "ישוב",
+  "יישוב",
+  "עיר",
+  "ת ז",
+  "תז",
+  "ת ז תלמיד",
+  "תז תלמיד",
+  "תעודת זהות",
+  "מספר זהות",
+  "זהות",
+  "national id",
+  "student id",
+  "zehut",
+]);
+
+export function normHeader(value: string): string {
   return value
     .replace(/^\uFEFF/, "")
     .replace(/["״']/g, "")
@@ -145,7 +165,8 @@ function normHeader(value: string): string {
 
 export function headerField(value: string): ImportField | null {
   const key = normHeader(value);
-  if (!key || key === "תלמיד") return key === "תלמיד" ? "fullName" : null;
+  if (!key || IGNORED_HEADERS.has(key)) return null;
+  if (key === "תלמיד") return "fullName";
   const found = HEADER_FIELDS.find(([alias]) => alias === key);
   return found ? found[1] : null;
 }
@@ -182,15 +203,8 @@ function looksLikeClass(value: string): boolean {
   return /^(יא|יב|[א-ת])\d{0,2}$/.test(key) || /^[a-z]\d{0,2}$/.test(key);
 }
 
-function looksLikeId(value: string): boolean {
-  const digits = value.replace(/\D/g, "");
-  if (digits.length < 5 || digits.length > 9) return false;
-  return toE164(value) === null;
-}
-
 function contentField(values: string[]): ImportField | null {
-  if (ratio(values, (value) => toE164(value) !== null) >= 0.6) return "parent1Phone";
-  if (ratio(values, looksLikeId) >= 0.6) return "nationalId";
+  if (ratio(values, (value) => splitPhoneNumbers(value).length > 0) >= 0.6) return "parent1Phone";
   if (ratio(values, looksLikeClass) >= 0.6) return "className";
   if (ratio(values, (value) => value.split(/\s+/).length >= 2 && /[\u0590-\u05FF]/.test(value) && !/\d/.test(value)) >= 0.6) {
     return "fullName";
@@ -210,8 +224,9 @@ export function detectColumns(matrix: string[][]): { hasHeader: boolean; mapping
   for (let index = 0; index < width; index += 1) {
     const header = hasHeader ? (first[index] ?? "").trim() : `עמודה ${index + 1}`;
     const samples = nonEmpty(body, index).slice(0, 3);
-    const fromHeader = hasHeader ? headerField(header) : null;
-    let field: ImportField = fromHeader ?? contentField(nonEmpty(body, index)) ?? "ignore";
+    const ignored = hasHeader && IGNORED_HEADERS.has(normHeader(header));
+    const fromHeader = hasHeader && !ignored ? headerField(header) : null;
+    let field: ImportField = ignored ? "ignore" : (fromHeader ?? contentField(nonEmpty(body, index)) ?? "ignore");
     if (field !== "ignore" && used.has(field)) {
       if (field === "parent1Phone") field = used.has("parent2Phone") ? "ignore" : "parent2Phone";
       else if (field === "parent1Name") field = used.has("parent2Name") ? "ignore" : "parent2Name";
@@ -229,19 +244,31 @@ function cell(row: string[], mappings: ColumnMapping[], field: ImportField): str
   return (row[mapping.index] ?? "").trim();
 }
 
-function nameOrder(mappings: ColumnMapping[]): "first-last" | "last-first" {
+const LAST_NAME_PREFIXES = new Set(["בן", "בר", "אבו", "אבן", "דה", "ואן", "אל"]);
+
+export function detectedNameOrder(mappings: ColumnMapping[]): NameOrder {
   const header = normHeader(mappings.find((item) => item.field === "fullName")?.header ?? "");
+  if (header === "שם תלמיד" || header === "שם התלמיד") return "last-first";
   const family = header.indexOf("משפחה");
   const given = header.indexOf("פרטי");
   if (family >= 0 && (given < 0 || family < given)) return "last-first";
   return "first-last";
 }
 
-export function splitFullName(value: string, order: "first-last" | "last-first"): { firstName: string; lastName: string } {
+export function splitFullName(value: string, order: NameOrder): { firstName: string; lastName: string } {
   const parts = value.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return { firstName: "", lastName: "" };
-  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
-  if (order === "last-first") return { lastName: parts[0], firstName: parts.slice(1).join(" ") };
+  if (parts.length === 1) {
+    return order === "last-first" ? { firstName: "", lastName: parts[0] } : { firstName: parts[0], lastName: "" };
+  }
+  if (order === "last-first") {
+    const lastCount = LAST_NAME_PREFIXES.has(parts[0]) && parts.length > 2 ? 2 : 1;
+    return { lastName: parts.slice(0, lastCount).join(" "), firstName: parts.slice(lastCount).join(" ") };
+  }
+  const prefixAt = parts.findIndex((part, index) => index > 0 && LAST_NAME_PREFIXES.has(part) && index < parts.length - 1);
+  if (prefixAt > 0) {
+    return { firstName: parts.slice(0, prefixAt).join(" "), lastName: parts.slice(prefixAt).join(" ") };
+  }
   return { firstName: parts.slice(0, -1).join(" "), lastName: parts[parts.length - 1] };
 }
 
@@ -249,14 +276,12 @@ export function buildPreview(
   matrix: string[][],
   mappings: ColumnMapping[],
   hasHeader: boolean,
-  existing: Array<{ firstName: string; lastName: string; className: string; nationalId?: string | null }>,
+  existing: Array<{ firstName: string; lastName: string; className: string }>,
+  order: NameOrder = detectedNameOrder(mappings),
 ): ImportPreviewRow[] {
   const body = hasHeader ? matrix.slice(1) : matrix;
-  const order = nameOrder(mappings);
   const seenNames = new Set<string>();
-  const seenIds = new Set<string>();
   const existingNames = new Set(existing.map((item) => `${classKey(item.className)}|${item.firstName}|${item.lastName}`));
-  const existingIds = new Set(existing.map((item) => (item.nationalId ?? "").replace(/\D/g, "")).filter(Boolean));
 
   return body
     .map((row, index) => {
@@ -264,45 +289,45 @@ export function buildPreview(
       const split = splitFullName(full, order);
       const firstName = cell(row, mappings, "firstName") || split.firstName;
       const lastName = cell(row, mappings, "lastName") || split.lastName;
-      const className = cell(row, mappings, "className");
-      const nationalId = cell(row, mappings, "nationalId").replace(/\s/g, "");
-      const parent1Phone = cell(row, mappings, "parent1Phone");
-      const parent2Phone = cell(row, mappings, "parent2Phone");
+      const rawClass = cell(row, mappings, "className");
+      const className = rawClass ? displayClassName(rawClass) : "";
+      const parent1Raw = cell(row, mappings, "parent1Phone");
+      const parent2Raw = cell(row, mappings, "parent2Phone");
+      const parent1Numbers = splitPhoneNumbers(parent1Raw);
+      const parent2Numbers = splitPhoneNumbers(parent2Raw);
       const preview: ImportPreviewRow = {
         line: (hasHeader ? 2 : 1) + index,
         firstName,
         lastName,
         className,
-        nationalId,
         gender: parseGender(cell(row, mappings, "gender")),
         parent1Name: cell(row, mappings, "parent1Name"),
-        parent1Phone,
-        parent1E164: toE164(parent1Phone),
+        parent1Phone: parent1Raw,
+        parent1E164: parent1Numbers[0] ?? null,
+        parent1E164b: parent1Numbers[1] ?? null,
         parent2Name: cell(row, mappings, "parent2Name"),
-        parent2Phone,
-        parent2E164: toE164(parent2Phone),
+        parent2Phone: parent2Raw,
+        parent2E164: parent2Numbers[0] ?? null,
+        parent2E164b: parent2Numbers[1] ?? null,
         issues: [],
       };
       if (!firstName || !lastName) preview.issues.push({ code: "missing_name", message: "חסר שם פרטי או שם משפחה" });
-      if (!preview.parent1E164 && !preview.parent2E164) {
-        if (parent1Phone || parent2Phone) preview.issues.push({ code: "invalid_phone", message: "טלפון לא תקין" });
+      const anyNumber = parent1Numbers.length + parent2Numbers.length > 0;
+      if (!anyNumber) {
+        if (parent1Raw || parent2Raw) preview.issues.push({ code: "invalid_phone", message: "טלפון לא תקין" });
         else preview.issues.push({ code: "missing_phone", message: "חסר טלפון הורה" });
-      } else if ((parent1Phone && !preview.parent1E164) || (parent2Phone && !preview.parent2E164)) {
-        preview.issues.push({ code: "invalid_phone", message: "אחד הטלפונים לא תקין" });
       }
       const nameKey = `${classKey(className)}|${firstName}|${lastName}`;
-      const idKey = nationalId.replace(/\D/g, "");
-      if ((idKey && seenIds.has(idKey)) || seenNames.has(nameKey)) {
+      if (firstName && lastName && seenNames.has(nameKey)) {
         preview.issues.push({ code: "duplicate_file", message: "כפילות בקובץ" });
       }
-      if (idKey) seenIds.add(idKey);
       if (firstName && lastName) seenNames.add(nameKey);
-      if ((idKey && existingIds.has(idKey)) || existingNames.has(nameKey)) {
+      if (firstName && lastName && existingNames.has(nameKey)) {
         preview.issues.push({ code: "duplicate_existing", message: "כבר קיים ויעודכן" });
       }
       return preview;
     })
-    .filter((row) => row.firstName || row.lastName || row.className || row.parent1Phone || row.nationalId);
+    .filter((row) => row.firstName || row.lastName || row.className || row.parent1Phone || row.parent2Phone);
 }
 
 export function unknownClasses(rows: ImportPreviewRow[], classNames: string[]): string[] {
@@ -314,12 +339,9 @@ export function unknownClasses(rows: ImportPreviewRow[], classNames: string[]): 
   return [...missing];
 }
 
-export async function readWorkbook(file: File): Promise<SheetGrid[]> {
-  const name = file.name.toLowerCase();
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (name.endsWith(".csv") || file.type.includes("csv") || file.type.startsWith("text/")) {
-    return [{ name: file.name, rows: parseCsv(decodeHebrewCsv(bytes)) }];
-  }
+export async function gridsFromBytes(bytes: Uint8Array, filename: string): Promise<SheetGrid[]> {
+  const name = filename.toLowerCase();
+  if (name.endsWith(".csv")) return [{ name: filename, rows: parseCsv(decodeHebrewCsv(bytes)) }];
   const xlsx = await import("xlsx");
   const book = xlsx.read(bytes, { type: "array", codepage: 1255 });
   return book.SheetNames.map((sheetName) => {
@@ -333,4 +355,12 @@ export async function readWorkbook(file: File): Promise<SheetGrid[]> {
       rows: matrix.map((row) => (Array.isArray(row) ? row.map((cell) => String(cell ?? "").trim()) : [])),
     };
   }).filter((sheet) => sheet.rows.some((row) => row.some(Boolean)));
+}
+
+export async function readWorkbook(file: File): Promise<SheetGrid[]> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (file.type.includes("csv") || file.type.startsWith("text/")) {
+    return [{ name: file.name, rows: parseCsv(decodeHebrewCsv(bytes)) }];
+  }
+  return gridsFromBytes(bytes, file.name);
 }

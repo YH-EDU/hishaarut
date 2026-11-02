@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getApi } from "../api";
 import type { ClassRoom, Gender, Student, StudentContact } from "../api/types";
-import { GENDER_LABEL } from "../api/types";
 import { useAuth } from "../auth";
 import { ImportWizard } from "../components/ImportWizard";
 import { PageHeader } from "../components/PageHeader";
-import { Banner, Button, Empty, Field, Ltr, studentName } from "../components/ui";
+import { WhatsAppButton } from "../components/WhatsAppButton";
+import { Banner, Button, Empty, Field, studentName } from "../components/ui";
 import { normalizeIlPhone } from "../lib/phone";
 
 export function ClassPage() {
@@ -98,17 +98,13 @@ export function ClassPage() {
               <div className="spread">
                 <div>
                   <strong>{studentName(student.firstName, student.lastName)}</strong>
-                  <div className="muted">
-                    {student.gender ? GENDER_LABEL[student.gender] : "ללא מגדר"}
-                    {student.active ? "" : " · לא פעיל"}
-                    {contact?.parentPhone ? (
-                      <>
-                        {" · "}
-                        <Ltr>{contact.parentPhone}</Ltr>
-                      </>
-                    ) : (
-                      " · אין טלפון"
-                    )}
+                  <div className="phone-line">
+                    {student.active ? null : <span className="badge">בארכיון</span>}
+                    {[contact?.parentPhone, contact?.parentPhone2, contact?.parent2Phone, contact?.parent2Phone2]
+                      .filter((phone): phone is string => Boolean(phone))
+                      .map((phone) => (
+                        <WhatsAppButton key={phone} phone={phone} message="שלום" />
+                      ))}
                   </div>
                 </div>
                 <Button variant="ghost" onClick={() => setEditing(editing === student.id ? null : student.id)}>
@@ -151,6 +147,10 @@ function StudentForm({
   const [gender, setGender] = useState<Gender | "">(student?.gender ?? "");
   const [parentName, setParentName] = useState(contact?.parentName ?? "");
   const [parentPhone, setParentPhone] = useState(contact?.parentPhone ?? "");
+  const [parentPhone2, setParentPhone2] = useState(contact?.parentPhone2 ?? "");
+  const [parent2Name, setParent2Name] = useState(contact?.parent2Name ?? "");
+  const [parent2Phone, setParent2Phone] = useState(contact?.parent2Phone ?? "");
+  const [parent2Phone2, setParent2Phone2] = useState(contact?.parent2Phone2 ?? "");
   const [active, setActive] = useState(student?.active ?? true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -167,6 +167,10 @@ function StudentForm({
         classId,
         parentName,
         parentPhone,
+        parentPhone2,
+        parent2Name,
+        parent2Phone,
+        parent2Phone2,
         active,
       });
       if (!student) {
@@ -203,11 +207,23 @@ function StudentForm({
           <option value="female">נקבה</option>
         </select>
       </Field>
-      <Field label="שם הורה">
+      <Field label="שם האב">
         <input value={parentName} onChange={(event) => setParentName(event.target.value)} />
       </Field>
-      <Field label="טלפון הורה">
-        <input inputMode="tel" value={parentPhone} onChange={(event) => setParentPhone(event.target.value)} />
+      <Field label="טלפון האב">
+        <input className="ltr" inputMode="tel" value={parentPhone} onChange={(event) => setParentPhone(event.target.value)} />
+      </Field>
+      <Field label="טלפון נוסף לאב">
+        <input className="ltr" inputMode="tel" value={parentPhone2} onChange={(event) => setParentPhone2(event.target.value)} />
+      </Field>
+      <Field label="שם האם">
+        <input value={parent2Name} onChange={(event) => setParent2Name(event.target.value)} />
+      </Field>
+      <Field label="טלפון האם">
+        <input className="ltr" inputMode="tel" value={parent2Phone} onChange={(event) => setParent2Phone(event.target.value)} />
+      </Field>
+      <Field label="טלפון נוסף לאם">
+        <input className="ltr" inputMode="tel" value={parent2Phone2} onChange={(event) => setParent2Phone2(event.target.value)} />
       </Field>
       {parentPhone && !normalizeIlPhone(parentPhone) ? <Banner tone="warn">המספר לא נראה ישראלי, וההודעה תדולג.</Banner> : null}
       <label className="row">

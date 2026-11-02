@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { getApi } from "../api";
 import type { ClassRoom, Gender, Student, StudentContact } from "../api/types";
-import { GENDER_LABEL } from "../api/types";
 import { useAuth } from "../auth";
 import { ImportWizard } from "../components/ImportWizard";
 import { EmptyState, PageHeader } from "../components/PageHeader";
 import { Sheet } from "../components/Sheet";
+import { WhatsAppButton } from "../components/WhatsAppButton";
 import { Banner, Button, Field } from "../components/ui";
+import type { WhatsappSlot } from "../api/types";
 
 type SortKey = "name" | "className" | "phone";
 
@@ -33,7 +34,19 @@ export function RosterPage() {
   const [grade, setGrade] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { parentName: string; parentPhone: string; parent2Phone: string }>>({});
+  const [drafts, setDrafts] = useState<
+    Record<
+      string,
+      {
+        parentName: string;
+        parentPhone: string;
+        parentPhone2: string;
+        parent2Name: string;
+        parent2Phone: string;
+        parent2Phone2: string;
+      }
+    >
+  >({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [openClassId, setOpenClassId] = useState<string | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -74,7 +87,7 @@ export function RosterPage() {
       if (classId && student.classId !== classId) return false;
       if (!q) return true;
       const contact = contactMap.get(student.id);
-      const blob = `${student.firstName} ${student.lastName} ${classNames.get(student.classId) ?? ""} ${contact?.parentPhone ?? ""} ${contact?.nationalId ?? ""}`;
+      const blob = `${student.firstName} ${student.lastName} ${classNames.get(student.classId) ?? ""} ${contact?.parentName ?? ""} ${contact?.parent2Name ?? ""} ${contact?.parentPhone ?? ""} ${contact?.parentPhone2 ?? ""} ${contact?.parent2Phone ?? ""} ${contact?.parent2Phone2 ?? ""}`;
       return blob.includes(q);
     });
     const value = (student: Student) => {
@@ -90,11 +103,15 @@ export function RosterPage() {
   }
 
   function draftFor(student: Student) {
+    const contact = contactMap.get(student.id);
     return (
       drafts[student.id] ?? {
-        parentName: contactMap.get(student.id)?.parentName ?? "",
-        parentPhone: contactMap.get(student.id)?.parentPhone ?? "",
-        parent2Phone: contactMap.get(student.id)?.parent2Phone ?? "",
+        parentName: contact?.parentName ?? "",
+        parentPhone: contact?.parentPhone ?? "",
+        parentPhone2: contact?.parentPhone2 ?? "",
+        parent2Name: contact?.parent2Name ?? "",
+        parent2Phone: contact?.parent2Phone ?? "",
+        parent2Phone2: contact?.parent2Phone2 ?? "",
       }
     );
   }
@@ -111,12 +128,23 @@ export function RosterPage() {
         classId: student.classId,
         parentName: draft.parentName,
         parentPhone: draft.parentPhone,
-        parent2Name: contactMap.get(student.id)?.parent2Name ?? "",
+        parentPhone2: draft.parentPhone2,
+        parent2Name: draft.parent2Name,
         parent2Phone: draft.parent2Phone,
-        nationalId: contactMap.get(student.id)?.nationalId ?? "",
+        parent2Phone2: draft.parent2Phone2,
         active: student.active,
       });
-      setInfo("השורה נשמרה");
+      setInfo("הפרטים נשמרו");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "השמירה נכשלה");
+    }
+  }
+
+  async function toggleOptOut(studentId: string, slot: WhatsappSlot, noWhatsapp: boolean) {
+    setError(null);
+    try {
+      await getApi().setWhatsappOptOut(studentId, slot, noWhatsapp);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "השמירה נכשלה");
@@ -229,7 +257,7 @@ export function RosterPage() {
     <div className="stack">
       <PageHeader
         title="תלמידים וכיתות"
-        lede="אפשר לעדכן טלפון, להעביר כיתה או תלמיד לארכיון, ולמחוק רק כשאין השארות."
+        lede="שם, כיתה, וההורים. ארכיון ומחיקה נשארים בפרטי התלמיד."
       />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
@@ -385,24 +413,22 @@ export function RosterPage() {
         ) : (
           <>
           <div className="phone-only list">
-            {rows.map((student) => {
-              const contact = contactMap.get(student.id);
-              const hasPhone = Boolean(contact?.parentPhone || contact?.parent2Phone);
-              return (
-                <button key={student.id} type="button" className="person-card" onClick={() => setOpenId(student.id)}>
-                  <span>
-                    <b>
-                      {student.firstName} {student.lastName}
-                    </b>
-                    <span className="muted">{classNames.get(student.classId)}</span>
+            {rows.map((student) => (
+              <button key={student.id} type="button" className="person-card" onClick={() => setOpenId(student.id)}>
+                <span>
+                  <b>
+                    {student.firstName} {student.lastName}
+                  </b>
+                  <span className="muted">
+                    {classNames.get(student.classId)}
+                    {student.active ? "" : " · בארכיון"}
                   </span>
-                  <span className="badge">{student.active ? (canSeePhones ? (hasPhone ? "יש טלפון" : "אין טלפון") : "טלפון מוסתר") : "בארכיון"}</span>
-                </button>
-              );
-            })}
+                </span>
+              </button>
+            ))}
           </div>
           <div className="table-scroll desktop-only">
-            <table className="data-table">
+            <table className="data-table people-table">
               <thead>
                 <tr>
                   {managesAll ? (
@@ -421,7 +447,6 @@ export function RosterPage() {
                       </label>
                     </th>
                   ) : null}
-                  {managesAll ? <th></th> : null}
                   <th>
                     <button type="button" onClick={() => toggleSort("name")}>
                       שם
@@ -432,21 +457,13 @@ export function RosterPage() {
                       כיתה
                     </button>
                   </th>
-                  <th>מגדר</th>
-                  <th>הורה</th>
-                  <th>
-                    <button type="button" onClick={() => toggleSort("phone")}>
-                      טלפון
-                    </button>
-                  </th>
-                  <th>טלפון 2</th>
-                  <th></th>
-                  <th>מצב</th>
+                  {canSeePhones ? <th>אב</th> : null}
+                  {canSeePhones ? <th>אם</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((student) => {
-                  const draft = draftFor(student);
+                  const contact = contactMap.get(student.id);
                   return (
                     <tr key={student.id}>
                       {managesAll ? (
@@ -454,65 +471,42 @@ export function RosterPage() {
                           <label className="check-row">
                             <input
                               type="checkbox"
-                              aria-label={`בחירת ${studentTitle(student)}`}
+                              aria-label={`בחירת ${student.firstName} ${student.lastName}`}
                               checked={pickedStudents.includes(student.id)}
                               onChange={() => togglePicked(pickedStudents, student.id, setPickedStudents)}
                             />
                           </label>
                         </td>
                       ) : null}
-                      {managesAll ? (
-                        <td>
-                          <div className="row">
-                            <Button variant="ghost" onClick={() => askStudentActive([student], !student.active)}>
-                              {student.active ? "ארכיון" : "שחזור"}
-                            </Button>
-                            <Button variant="danger" onClick={() => void askDeleteStudent(student)}>
-                              מחיקה
-                            </Button>
-                          </div>
-                        </td>
-                      ) : null}
                       <td>
-                        {student.firstName} {student.lastName}
+                        <button type="button" className="text-button" onClick={() => setOpenId(student.id)}>
+                          {student.firstName} {student.lastName}
+                          {student.active ? "" : " · בארכיון"}
+                        </button>
                       </td>
                       <td>{classNames.get(student.classId)}</td>
-                      <td>{student.gender ? GENDER_LABEL[student.gender] : "—"}</td>
-                      <td>
-                        <input
-                          value={draft.parentName}
-                          aria-label={`שם הורה של ${student.firstName}`}
-                          onChange={(event) =>
-                            setDrafts((current) => ({ ...current, [student.id]: { ...draft, parentName: event.target.value } }))
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="ltr"
-                          value={draft.parentPhone}
-                          aria-label={`טלפון של ${student.firstName}`}
-                          onChange={(event) =>
-                            setDrafts((current) => ({ ...current, [student.id]: { ...draft, parentPhone: event.target.value } }))
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="ltr"
-                          value={draft.parent2Phone}
-                          aria-label={`טלפון שני של ${student.firstName}`}
-                          onChange={(event) =>
-                            setDrafts((current) => ({ ...current, [student.id]: { ...draft, parent2Phone: event.target.value } }))
-                          }
-                        />
-                      </td>
-                      <td>
-                        <Button variant="ghost" onClick={() => void saveRow(student)}>
-                          שמירה
-                        </Button>
-                      </td>
-                      <td>{student.active ? "פעיל" : "בארכיון"}</td>
+                      {canSeePhones ? (
+                        <td>
+                          <ParentBits
+                            name={contact?.parentName}
+                            phones={[
+                              { phone: contact?.parentPhone, off: contact?.parentPhoneNoWhatsapp },
+                              { phone: contact?.parentPhone2, off: contact?.parentPhone2NoWhatsapp },
+                            ]}
+                          />
+                        </td>
+                      ) : null}
+                      {canSeePhones ? (
+                        <td>
+                          <ParentBits
+                            name={contact?.parent2Name}
+                            phones={[
+                              { phone: contact?.parent2Phone, off: contact?.parent2PhoneNoWhatsapp },
+                              { phone: contact?.parent2Phone2, off: contact?.parent2Phone2NoWhatsapp },
+                            ]}
+                          />
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}
@@ -523,9 +517,12 @@ export function RosterPage() {
         )}
       </section>
       {openId ? (
-        <Sheet full title="פרטי תלמיד" onClose={() => setOpenId(null)}>
+        <Sheet full title="תלמיד" onClose={() => setOpenId(null)}>
           {students.filter((student) => student.id === openId).map((student) => {
             const draft = draftFor(student);
+            const contact = contactMap.get(student.id);
+            const setDraft = (patch: Partial<ReturnType<typeof draftFor>>) =>
+              setDrafts((current) => ({ ...current, [student.id]: { ...draft, ...patch } }));
             return (
               <div key={student.id} className="stack">
                 <p>
@@ -533,45 +530,52 @@ export function RosterPage() {
                     {student.firstName} {student.lastName}
                   </strong>
                   <br />
-                  <span className="muted">{classNames.get(student.classId)}</span>
+                  <span className="muted">
+                    {classNames.get(student.classId)}
+                    {student.active ? "" : " · בארכיון"}
+                  </span>
                 </p>
                 {managesAll || session?.profile.role === "homeroom" ? (
                   <>
-                    <Field label="שם הורה">
-                      <input
-                        value={draft.parentName}
-                        onChange={(event) =>
-                          setDrafts((current) => ({ ...current, [student.id]: { ...draft, parentName: event.target.value } }))
-                        }
-                      />
+                    <Field label="שם האב">
+                      <input value={draft.parentName} onChange={(event) => setDraft({ parentName: event.target.value })} />
                     </Field>
-                    <Field label="טלפון הורה">
-                      <input
-                        className="ltr"
-                        inputMode="tel"
-                        value={draft.parentPhone}
-                        onChange={(event) =>
-                          setDrafts((current) => ({ ...current, [student.id]: { ...draft, parentPhone: event.target.value } }))
-                        }
-                      />
+                    <PhoneEditor
+                      label="טלפון האב"
+                      value={draft.parentPhone}
+                      off={contact?.parentPhoneNoWhatsapp ?? false}
+                      canToggle={managesAll}
+                      onChange={(value) => setDraft({ parentPhone: value })}
+                      onToggle={(value) => void toggleOptOut(student.id, "parent1", value)}
+                    />
+                    <PhoneEditor
+                      label="טלפון נוסף לאב"
+                      value={draft.parentPhone2}
+                      off={contact?.parentPhone2NoWhatsapp ?? false}
+                      canToggle={managesAll}
+                      onChange={(value) => setDraft({ parentPhone2: value })}
+                      onToggle={(value) => void toggleOptOut(student.id, "parent1b", value)}
+                    />
+                    <Field label="שם האם">
+                      <input value={draft.parent2Name} onChange={(event) => setDraft({ parent2Name: event.target.value })} />
                     </Field>
-                    <Field label="טלפון הורה 2">
-                      <input
-                        className="ltr"
-                        inputMode="tel"
-                        value={draft.parent2Phone}
-                        onChange={(event) =>
-                          setDrafts((current) => ({ ...current, [student.id]: { ...draft, parent2Phone: event.target.value } }))
-                        }
-                      />
-                    </Field>
-                    <Button
-                      onClick={() =>
-                        void saveRow(student).then(() => setOpenId(null))
-                      }
-                    >
-                      שמירה
-                    </Button>
+                    <PhoneEditor
+                      label="טלפון האם"
+                      value={draft.parent2Phone}
+                      off={contact?.parent2PhoneNoWhatsapp ?? false}
+                      canToggle={managesAll}
+                      onChange={(value) => setDraft({ parent2Phone: value })}
+                      onToggle={(value) => void toggleOptOut(student.id, "parent2", value)}
+                    />
+                    <PhoneEditor
+                      label="טלפון נוסף לאם"
+                      value={draft.parent2Phone2}
+                      off={contact?.parent2Phone2NoWhatsapp ?? false}
+                      canToggle={managesAll}
+                      onChange={(value) => setDraft({ parent2Phone2: value })}
+                      onToggle={(value) => void toggleOptOut(student.id, "parent2b", value)}
+                    />
+                    <Button onClick={() => void saveRow(student)}>שמירה</Button>
                   </>
                 ) : (
                   <p className="muted">
@@ -718,6 +722,60 @@ export function RosterPage() {
         />
       ) : null}
     </div>
+    </div>
+  );
+}
+
+
+function ParentBits({
+  name,
+  phones,
+}: {
+  name?: string | null;
+  phones: Array<{ phone?: string | null; off?: boolean }>;
+}) {
+  const shown = phones.filter((item) => item.phone);
+  if (!name && shown.length === 0) return <span className="muted">—</span>;
+  return (
+    <div className="parent-cell">
+      <strong>{name || "—"}</strong>
+      <div className="phone-line">
+        {shown.length === 0 ? <span className="muted">אין טלפון</span> : null}
+        {shown.map((item) => (
+          <WhatsAppButton key={item.phone} phone={item.phone ?? ""} message="שלום" off={item.off} compact />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PhoneEditor({
+  label,
+  value,
+  off,
+  canToggle,
+  onChange,
+  onToggle,
+}: {
+  label: string;
+  value: string;
+  off: boolean;
+  canToggle: boolean;
+  onChange: (value: string) => void;
+  onToggle: (value: boolean) => void;
+}) {
+  return (
+    <div className="stack">
+      <Field label={label}>
+        <input className="ltr" inputMode="tel" value={value} onChange={(event) => onChange(event.target.value)} />
+      </Field>
+      {value ? <WhatsAppButton phone={value} message="שלום" off={off} /> : null}
+      {canToggle && value ? (
+        <label className="check-row">
+          <input type="checkbox" checked={off} onChange={(event) => onToggle(event.target.checked)} />
+          אין וואטסאפ במספר הזה
+        </label>
+      ) : null}
     </div>
   );
 }

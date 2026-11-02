@@ -764,3 +764,54 @@ begin
     raise exception 'teacher archive stuck';
   end if;
 end $$;
+
+-- Second parent numbers stay private. Only secretary/admin can flag "no WhatsApp".
+do $$
+declare
+  phones text[];
+begin
+  phones := public.ordered_parent_phones('050-7000001', '050-7000002', null, null, true, false, false, false);
+  if phones <> array['972507000002']::text[] then
+    raise exception 'flagged first number should fall through, got %', phones;
+  end if;
+end $$;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000004', false);
+set role authenticated;
+select public.set_student_whatsapp_opt_out('20000000-0000-0000-0000-000000000001', 'parent1', true);
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000003', false);
+set role authenticated;
+do $$
+begin
+  perform public.set_student_whatsapp_opt_out('20000000-0000-0000-0000-000000000001', 'parent1', false);
+  raise exception 'homeroom changed a whatsapp flag';
+exception
+  when others then
+    if sqlerrm not like '%רק מזכירות יכולה לסמן שאין וואטסאפ%' then
+      raise;
+    end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+declare
+  extra text;
+begin
+  select parent_phone_2 into extra from public.students limit 1;
+  raise exception 'teacher read parent_phone_2';
+exception
+  when insufficient_privilege then
+    null;
+end $$;
+reset role;
+
+do $$
+begin
+  if (select parent_phone_no_whatsapp from public.students where id = '20000000-0000-0000-0000-000000000001') is distinct from true then
+    raise exception 'whatsapp flag did not stick';
+  end if;
+end $$;

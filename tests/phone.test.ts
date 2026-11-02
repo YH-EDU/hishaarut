@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maskPhone, normalizeIlPhone, whatsappUrl } from "../src/lib/phone";
+import { maskPhone, normalizeIlPhone, splitPhoneNumbers, whatsappCandidates, whatsappUrl } from "../src/lib/phone";
 
 describe("normalizeIlPhone", () => {
   it("normalizes local mobile numbers", () => {
@@ -32,5 +32,16 @@ describe("whatsappUrl", () => {
 describe("maskPhone", () => {
   it("hides the middle of a mobile number", () => {
     expect(maskPhone("050-7000001")).toBe("050-•••-001");
+  });
+});
+
+describe("splitPhoneNumbers", () => {
+  it("keeps up to two valid numbers and skips the empty side", () => {
+    expect(splitPhoneNumbers("050-2612526 ,053-5286346")).toEqual(["+972502612526", "+972535286346"]);
+    expect(splitPhoneNumbers("")).toEqual([]);
+    expect(whatsappCandidates([
+      { phone: "050-2612526", noWhatsapp: true },
+      { phone: "053-5286346" },
+    ])).toEqual(["972535286346"]);
   });
 });

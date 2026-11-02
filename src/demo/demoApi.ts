@@ -1,7 +1,7 @@
 import { blockedDeleteMessage } from "../lib/archive";
 import { jerusalemToday } from "../lib/dates";
 import { renderDetentionMessage } from "../lib/messages";
-import { normalizeIlPhone } from "../lib/phone";
+import { normalizeIlPhone, whatsappCandidates } from "../lib/phone";
 import type {
   AppApi,
   ClassRoom,
@@ -80,9 +80,14 @@ function seed(): DemoState {
       studentId: id,
       parentName,
       parentPhone,
+      parentPhone2: null,
+      parentPhoneNoWhatsapp: false,
+      parentPhone2NoWhatsapp: false,
       parent2Name: null,
       parent2Phone: null,
-      nationalId: null,
+      parent2Phone2: null,
+      parent2PhoneNoWhatsapp: false,
+      parent2Phone2NoWhatsapp: false,
     };
   });
   return {
@@ -186,7 +191,17 @@ function enqueue(detention: Detention, event: NotificationRow["event"]) {
   const contact = student ? state.contacts[student.id] : undefined;
   const marker = state.profiles.find((item) => item.id === detention.markedBy);
   const channel = state.settings.notificationMode === "cloud_api" ? "whatsapp_cloud" : "whatsapp_link";
-  const parentPhone = normalizeIlPhone(contact?.parentPhone) ?? normalizeIlPhone(contact?.parent2Phone);
+  const candidates = whatsappCandidates([
+    { phone: contact?.parentPhone, noWhatsapp: contact?.parentPhoneNoWhatsapp },
+    { phone: contact?.parentPhone2, noWhatsapp: contact?.parentPhone2NoWhatsapp },
+    { phone: contact?.parent2Phone, noWhatsapp: contact?.parent2PhoneNoWhatsapp },
+    { phone: contact?.parent2Phone2, noWhatsapp: contact?.parent2Phone2NoWhatsapp },
+  ]);
+  const parentPhone = candidates[0] ?? null;
+  const fallbackPhones = candidates.slice(1);
+  const rawPhones = [contact?.parentPhone, contact?.parentPhone2, contact?.parent2Phone, contact?.parent2Phone2];
+  const anyRaw = rawPhones.some((phone) => phone?.trim());
+  const anyValid = rawPhones.some((phone) => normalizeIlPhone(phone));
   const homeroomPhone = normalizeIlPhone(homeroom?.phone);
   const base = {
     event,
@@ -212,10 +227,11 @@ function enqueue(detention: Detention, event: NotificationRow["event"]) {
     recipientType: "parent",
     recipientLabel: contact?.parentName || "הורה",
     recipientPhone: parentPhone,
+    fallbackPhones,
     messageBody: messageFor("parent"),
     status: parentPhone ? "pending" : "skipped",
     sentAt: null,
-    errorText: parentPhone ? null : contact?.parentPhone ? "invalid_phone" : "no_phone",
+    errorText: parentPhone ? null : !anyRaw ? "no_phone" : anyValid ? "no_whatsapp" : "invalid_phone",
   };
   let homeroomError: string | null = null;
   let homeroomStatus: NotificationRow["status"] = "pending";
@@ -428,12 +444,18 @@ export const demoApi: AppApi = {
       student.classId = input.classId;
       student.active = input.active;
       state.contacts[student.id] = {
+        ...state.contacts[student.id],
         studentId: student.id,
         parentName: input.parentName.trim() || null,
         parentPhone: input.parentPhone.trim() || null,
+        parentPhone2: input.parentPhone2?.trim() || null,
+        parentPhoneNoWhatsapp: state.contacts[student.id]?.parentPhoneNoWhatsapp ?? false,
+        parentPhone2NoWhatsapp: state.contacts[student.id]?.parentPhone2NoWhatsapp ?? false,
         parent2Name: input.parent2Name?.trim() || null,
         parent2Phone: input.parent2Phone?.trim() || null,
-        nationalId: input.nationalId?.trim() || null,
+        parent2Phone2: input.parent2Phone2?.trim() || null,
+        parent2PhoneNoWhatsapp: state.contacts[student.id]?.parent2PhoneNoWhatsapp ?? false,
+        parent2Phone2NoWhatsapp: state.contacts[student.id]?.parent2Phone2NoWhatsapp ?? false,
       };
     } else {
       const id = crypto.randomUUID();
@@ -449,9 +471,14 @@ export const demoApi: AppApi = {
         studentId: id,
         parentName: input.parentName.trim() || null,
         parentPhone: input.parentPhone.trim() || null,
+        parentPhone2: input.parentPhone2?.trim() || null,
+        parentPhoneNoWhatsapp: false,
+        parentPhone2NoWhatsapp: false,
         parent2Name: input.parent2Name?.trim() || null,
         parent2Phone: input.parent2Phone?.trim() || null,
-        nationalId: input.nationalId?.trim() || null,
+        parent2Phone2: input.parent2Phone2?.trim() || null,
+        parent2PhoneNoWhatsapp: false,
+        parent2Phone2NoWhatsapp: false,
       };
     }
     emitChange();
@@ -485,6 +512,17 @@ export const demoApi: AppApi = {
     }
     state.students = state.students.filter((item) => item.id !== id);
     delete state.contacts[id];
+    emitChange();
+  },
+
+  async setWhatsappOptOut(studentId, slot, noWhatsapp) {
+    requireManager();
+    const contact = state.contacts[studentId];
+    if (!contact) throw new Error("התלמיד לא נמצא");
+    if (slot === "parent1") contact.parentPhoneNoWhatsapp = noWhatsapp;
+    else if (slot === "parent1b") contact.parentPhone2NoWhatsapp = noWhatsapp;
+    else if (slot === "parent2") contact.parent2PhoneNoWhatsapp = noWhatsapp;
+    else contact.parent2Phone2NoWhatsapp = noWhatsapp;
     emitChange();
   },
 
