@@ -23,12 +23,34 @@ export interface SessionState {
   profile: Profile;
 }
 
+export interface DayEnds {
+  sun: string | null;
+  mon: string | null;
+  tue: string | null;
+  wed: string | null;
+  thu: string | null;
+  fri: string | null;
+  sat: string | null;
+}
+
+export const DEFAULT_DAY_ENDS: DayEnds = {
+  sun: "16:00",
+  mon: "16:00",
+  tue: "14:00",
+  wed: "16:00",
+  thu: "16:00",
+  fri: "12:00",
+  sat: null,
+};
+
 export interface SchoolSettings {
   schoolName: string;
   allowedEmailDomain: string | null;
+  autoApproveDomain: string | null;
   notificationMode: NotificationMode;
   whatsappPhoneNumberId: string | null;
   whatsappDisplayNumber: string | null;
+  dayEnds: DayEnds;
 }
 
 export type AccessStatus = "ok" | "pending" | "denied";
@@ -170,6 +192,7 @@ export interface AppApi {
   updateOwnProfile(patch: { fullName: string; phone: string }): Promise<void>;
   getSettings(): Promise<SchoolSettings>;
   updateSettings(patch: SchoolSettings): Promise<void>;
+  updateDayEnds(ends: DayEnds): Promise<void>;
   accessStatus(): Promise<AccessStatus>;
   listAllowedEmails(): Promise<string[]>;
   setAllowedEmails(emails: string[]): Promise<void>;

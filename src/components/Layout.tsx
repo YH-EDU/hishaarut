@@ -20,7 +20,7 @@ function desktopNav(role: Role): Array<{ to: string; label: string }> {
   const reports = { to: "/reports", label: "דוחות" };
   const settings = { to: "/settings", label: "הגדרות" };
   if (role === "admin") return [mark, releases, students, staff, reports, settings];
-  if (role === "secretary") return [mark, releases, students, staff, reports];
+  if (role === "secretary") return [mark, releases, students, staff, reports, settings];
   if (role === "homeroom") return [mark, releases, students, reports];
   return [mark, releases];
 }
@@ -40,7 +40,7 @@ function moreLinksFor(role: Role): Array<{ to: string; label: string }> {
   const settings = { to: "/settings", label: "הגדרות" };
   const account = { to: "/account", label: "החשבון" };
   if (role === "admin") return [staff, reports, settings, account];
-  if (role === "secretary") return [staff, reports, account];
+  if (role === "secretary") return [staff, reports, settings, account];
   if (role === "homeroom") return [reports, account];
   return [account];
 }
@@ -174,6 +174,7 @@ export function Layout() {
           item.to === "#more" ? (
             <button key="more" type="button" className={moreOpen ? "active" : undefined} onClick={() => setMoreOpen(true)}>
               <TabIcon name={item.icon} />
+              {role === "admin" || role === "secretary" ? <ReadyBadge count={pendingCount} /> : null}
               <span>{item.label}</span>
             </button>
           ) : (

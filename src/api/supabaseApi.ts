@@ -5,6 +5,7 @@ import type {
   AppApi,
   ClassInput,
   ClassRoom,
+  DayEnds,
   Detention,
   DetentionInput,
   DetentionQuery,
@@ -35,9 +36,34 @@ interface SettingsRow {
   school_name: string;
   allowed_email_domain: string | null;
   allowed_domain?: string | null;
+  auto_approve_domain?: string | null;
   notification_mode: SchoolSettings["notificationMode"];
   whatsapp_phone_number_id: string | null;
   whatsapp_display_number: string | null;
+  end_sun?: string | null;
+  end_mon?: string | null;
+  end_tue?: string | null;
+  end_wed?: string | null;
+  end_thu?: string | null;
+  end_fri?: string | null;
+  end_sat?: string | null;
+}
+
+function clock(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.slice(0, 5);
+}
+
+function dayEndsFrom(row: SettingsRow): DayEnds {
+  return {
+    sun: clock(row.end_sun) ?? "16:00",
+    mon: clock(row.end_mon) ?? "16:00",
+    tue: clock(row.end_tue) ?? "14:00",
+    wed: clock(row.end_wed) ?? "16:00",
+    thu: clock(row.end_thu) ?? "16:00",
+    fri: clock(row.end_fri) ?? "12:00",
+    sat: clock(row.end_sat),
+  };
 }
 
 interface ClassRow {
@@ -153,7 +179,9 @@ function mapSettings(row: SettingsRow): SchoolSettings {
   return {
     schoolName: row.school_name,
     allowedEmailDomain: row.allowed_domain ?? row.allowed_email_domain,
+    autoApproveDomain: row.auto_approve_domain ?? null,
     notificationMode: row.notification_mode,
+    dayEnds: dayEndsFrom(row),
     whatsappPhoneNumberId: row.whatsapp_phone_number_id,
     whatsappDisplayNumber: row.whatsapp_display_number,
   };
@@ -351,7 +379,7 @@ export const supabaseApi: AppApi = {
     const { data, error } = await client()
       .from("school_settings")
       .select(
-        "school_name, allowed_email_domain, allowed_domain, notification_mode, whatsapp_phone_number_id, whatsapp_display_number",
+        "school_name, allowed_email_domain, allowed_domain, auto_approve_domain, notification_mode, whatsapp_phone_number_id, whatsapp_display_number, end_sun, end_mon, end_tue, end_wed, end_thu, end_fri, end_sat",
       )
       .eq("id", 1)
       .single();
@@ -366,7 +394,15 @@ export const supabaseApi: AppApi = {
         school_name: patch.schoolName,
         allowed_email_domain: patch.allowedEmailDomain,
         allowed_domain: patch.allowedEmailDomain,
+        auto_approve_domain: patch.autoApproveDomain,
         notification_mode: patch.notificationMode,
+        end_sun: patch.dayEnds.sun,
+        end_mon: patch.dayEnds.mon,
+        end_tue: patch.dayEnds.tue,
+        end_wed: patch.dayEnds.wed,
+        end_thu: patch.dayEnds.thu,
+        end_fri: patch.dayEnds.fri,
+        end_sat: patch.dayEnds.sat,
         whatsapp_phone_number_id: patch.whatsappPhoneNumberId,
         whatsapp_display_number: patch.whatsappDisplayNumber,
       })
@@ -375,7 +411,25 @@ export const supabaseApi: AppApi = {
     requireRows(data as { id: string }[] | null, error);
   },
 
+  async updateDayEnds(ends) {
+    const { data, error } = await client()
+      .from("school_settings")
+      .update({
+        end_sun: ends.sun,
+        end_mon: ends.mon,
+        end_tue: ends.tue,
+        end_wed: ends.wed,
+        end_thu: ends.thu,
+        end_fri: ends.fri,
+        end_sat: ends.sat,
+      })
+      .eq("id", 1)
+      .select("id");
+    requireRows(data as { id: string }[] | null, error);
+  },
+
   async accessStatus() {
+    await client().rpc("maybe_auto_approve");
     const { data, error } = await client().rpc("my_access_status");
     if (error) throw asError(error);
     if (data === "ok" || data === "pending" || data === "denied") return data;

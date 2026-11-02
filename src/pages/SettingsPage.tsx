@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
 import { getApi } from "../api";
-import type { Reason, SchoolSettings } from "../api/types";
+import type { DayEnds, Reason, SchoolSettings } from "../api/types";
+import { useAuth } from "../auth";
 import { EmptyState, PageHeader } from "../components/PageHeader";
 import { Banner, Button, Field } from "../components/ui";
 
+const DAY_FIELDS: Array<{ key: keyof DayEnds; label: string }> = [
+  { key: "sun", label: "ראשון" },
+  { key: "mon", label: "שני" },
+  { key: "tue", label: "שלישי" },
+  { key: "wed", label: "רביעי" },
+  { key: "thu", label: "חמישי" },
+  { key: "fri", label: "שישי" },
+  { key: "sat", label: "שבת" },
+];
+
 export function SettingsPage() {
+  const isAdmin = useAuth().session?.profile.role === "admin";
   const [reasons, setReasons] = useState<Reason[]>([]);
   const [settings, setSettings] = useState<SchoolSettings | null>(null);
   const [label, setLabel] = useState("");
@@ -23,10 +35,11 @@ export function SettingsPage() {
 
   return (
     <div className="stack">
-      <PageHeader title="הגדרות" lede="שם בית הספר שמופיע להורים, והסיבות שהמורה רואה בזמן הסימון. רק מנהל משנה את המסך הזה." />
+      <PageHeader title="הגדרות" lede="שעות סיום הלימודים קובעות מתי מתחילה ההשארות. מנהל או מזכירות יכולים לעדכן אותן." />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
-      <section className="panel stack">
+      {settings ? <DayEndsForm settings={settings} onSaved={async () => { setInfo("שעות הסיום נשמרו"); await load(); }} onError={setError} /> : null}
+      {isAdmin ? <section className="panel stack">
         <h2>סיבות השארות</h2>
         <p className="muted">אלה הכפתורים במסך הסימון. הסתרה משאירה את ההיסטוריה, אבל הסיבה לא תופיע לסימון חדש.</p>
         {reasons.length === 0 ? (
@@ -112,8 +125,8 @@ export function SettingsPage() {
             הוספה
           </Button>
         </div>
-      </section>
-      {settings ? <SchoolForm settings={settings} onSaved={async () => { setInfo("ההגדרות נשמרו"); await load(); }} onError={setError} /> : null}
+      </section> : null}
+      {isAdmin && settings ? <SchoolForm settings={settings} onSaved={async () => { setInfo("ההגדרות נשמרו"); await load(); }} onError={setError} /> : null}
     </div>
   );
 }
@@ -128,37 +141,20 @@ function SchoolForm({
   onError: (message: string) => void;
 }) {
   const [draft, setDraft] = useState(settings);
-  const [emailsText, setEmailsText] = useState("");
-
-  useEffect(() => {
-    void getApi()
-      .listAllowedEmails()
-      .then((emails) => setEmailsText(emails.join("\n")))
-      .catch((err: unknown) => onError(err instanceof Error ? err.message : "אירעה שגיאה"));
-  }, [onError]);
 
   return (
     <section className="panel stack">
       <h2>בית הספר</h2>
-      <p className="muted">השם נכנס להודעת הוואטסאפ. כל עוד הדומיין ורשימת המיילים ריקים, אין הגבלה. ברגע שממלאים אחד מהם, רק מי שתואם לדומיין או נמצא ברשימה רואה נתונים.</p>
+      <p className="muted">כל חשבון גוגל יכול להיכנס ולבקש תפקיד. הנתונים נפתחים רק אחרי שמנהל או מזכירות מאשרים. דומיין לאישור אוטומטי הוא רשות, וכבוי כברירת מחדל.</p>
       <Field label="שם בית הספר בהודעות">
         <input value={draft.schoolName} onChange={(event) => setDraft({ ...draft, schoolName: event.target.value })} />
       </Field>
-      <Field label="דומיין מורשה">
+      <Field label="דומיין לאישור אוטומטי כמורה">
         <input
           className="ltr"
-          placeholder="school.education.gov.il"
-          value={draft.allowedEmailDomain ?? ""}
-          onChange={(event) => setDraft({ ...draft, allowedEmailDomain: event.target.value })}
-        />
-      </Field>
-      <Field label="מיילים מורשים, אחד בכל שורה">
-        <textarea
-          className="ltr"
-          rows={5}
-          placeholder={"principal@gmail.com\nteacher@school.education.gov.il"}
-          value={emailsText}
-          onChange={(event) => setEmailsText(event.target.value)}
+          placeholder="school.example"
+          value={draft.autoApproveDomain ?? ""}
+          onChange={(event) => setDraft({ ...draft, autoApproveDomain: event.target.value })}
         />
       </Field>
       <Field label="מספר הוואטסאפ העסקי שמוצג לצוות">
@@ -191,16 +187,57 @@ function SchoolForm({
           void getApi()
             .updateSettings({
               ...draft,
-              allowedEmailDomain: draft.allowedEmailDomain?.trim() || null,
+              allowedEmailDomain: null,
+              autoApproveDomain: draft.autoApproveDomain?.trim() || null,
               whatsappPhoneNumberId: draft.whatsappPhoneNumberId?.trim() || null,
               whatsappDisplayNumber: draft.whatsappDisplayNumber?.trim() || null,
             })
-            .then(() => getApi().setAllowedEmails(emailsText.split(/\n+/)))
+            .then(() => getApi().setAllowedEmails([]))
             .then(onSaved)
             .catch((err: unknown) => onError(err instanceof Error ? err.message : "השמירה נכשלה"))
         }
       >
         שמירת הגדרות
+      </Button>
+    </section>
+  );
+}
+
+function DayEndsForm({
+  settings,
+  onSaved,
+  onError,
+}: {
+  settings: SchoolSettings;
+  onSaved: () => Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const [ends, setEnds] = useState<DayEnds>(settings.dayEnds);
+  return (
+    <section className="panel stack">
+      <h2>סיום יום הלימודים</h2>
+      <p className="muted">ההשארות מתחילה בשעה הזו. אם סימנו אחריה, הספירה מתחילה מרגע הסימון. שעה ריקה, כמו שבת, אומרת שאין לימודים.</p>
+      <div className="day-grid">
+        {DAY_FIELDS.map((day) => (
+          <Field key={day.key} label={day.label}>
+            <input
+              type="time"
+              lang="en-GB"
+              value={ends[day.key] ?? ""}
+              onChange={(event) => setEnds({ ...ends, [day.key]: event.target.value || null })}
+            />
+          </Field>
+        ))}
+      </div>
+      <Button
+        onClick={() =>
+          void getApi()
+            .updateDayEnds(ends)
+            .then(onSaved)
+            .catch((err: unknown) => onError(err instanceof Error ? err.message : "השמירה נכשלה"))
+        }
+      >
+        שמירת השעות
       </Button>
     </section>
   );

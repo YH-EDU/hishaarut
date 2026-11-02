@@ -53,9 +53,6 @@ export function RosterPage() {
   >({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [openClassId, setOpenClassId] = useState<string | null>(null);
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const [pickedStudents, setPickedStudents] = useState<string[]>([]);
-  const [pickedClasses, setPickedClasses] = useState<string[]>([]);
   const [includeStudents, setIncludeStudents] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -239,23 +236,19 @@ export function RosterPage() {
     try {
       if (pending.kind === "students-active") {
         await getApi().setStudentsActive(pending.ids, pending.active);
-        setPickedStudents([]);
         setInfo(pending.active ? "התלמידים שוחזרו" : "התלמידים הועברו לארכיון");
       } else if (pending.kind === "class-active") {
         for (const id of pending.ids) {
           await getApi().setClassActive(id, pending.active, includeStudents && pending.studentCount > 0);
         }
-        setPickedClasses((current) => current.filter((id) => !pending.ids.includes(id)));
         setInfo(pending.active ? "הכיתה שוחזרה" : "הכיתה הועברה לארכיון");
       } else if (pending.kind === "delete-student") {
         await getApi().deleteStudent(pending.id, confirmText);
         setOpenId(null);
-        setPickedStudents((current) => current.filter((id) => id !== pending.id));
         setInfo(`${pending.name} נמחק`);
       } else {
         await getApi().deleteClass(pending.id, confirmText);
         setOpenClassId(null);
-        setPickedClasses((current) => current.filter((id) => id !== pending.id));
         setInfo(`כיתה ${pending.name} נמחקה`);
       }
       setPending(null);
@@ -268,10 +261,6 @@ export function RosterPage() {
     }
   }
 
-  function togglePicked(list: string[], id: string, setList: (ids: string[]) => void) {
-    setList(list.includes(id) ? list.filter((item) => item !== id) : [...list, id]);
-  }
-
   return (
     <div className="stack">
       <PageHeader
@@ -280,98 +269,6 @@ export function RosterPage() {
       />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
-
-      <section className="panel stack desktop-only">
-        <h2>כיתות</h2>
-        {visibleClasses.length === 0 ? (
-          <EmptyState title="אין עדיין כיתות" detail="הוסיפו את הכיתה הראשונה, למשל ז׳1. רק אחר כך אפשר לייבא תלמידים." />
-        ) : shownClasses.length === 0 ? (
-          <EmptyState title="כל הכיתות בארכיון" detail="סמנו הצגת ארכיון כדי לראות אותן ולשחזר." />
-        ) : (
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {managesAll ? (
-                    <th>
-                      <label className="check-row">
-                        <input
-                          type="checkbox"
-                          aria-label="בחירת כל הכיתות"
-                          checked={shownClasses.every((room) => pickedClasses.includes(room.id))}
-                          onChange={() =>
-                            setPickedClasses(
-                              shownClasses.every((room) => pickedClasses.includes(room.id)) ? [] : shownClasses.map((room) => room.id),
-                            )
-                          }
-                        />
-                      </label>
-                    </th>
-                  ) : null}
-                  {managesAll ? <th></th> : null}
-                  <th>כיתה</th>
-                  <th>שכבה</th>
-                  <th>תלמידים</th>
-                  <th>מצב</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shownClasses.map((room) => (
-                  <tr key={room.id}>
-                    {managesAll ? (
-                      <td>
-                        <label className="check-row">
-                          <input
-                            type="checkbox"
-                            aria-label={`בחירת כיתה ${room.name}`}
-                            checked={pickedClasses.includes(room.id)}
-                            onChange={() => togglePicked(pickedClasses, room.id, setPickedClasses)}
-                          />
-                        </label>
-                      </td>
-                    ) : null}
-                    {managesAll ? (
-                      <td>
-                        <div className="row">
-                          <Button variant="danger" onClick={() => void askDeleteClass(room)}>
-                            מחיקה
-                          </Button>
-                        </div>
-                      </td>
-                    ) : null}
-                    <td>{room.name}</td>
-                    <td>{room.grade || "—"}</td>
-                    <td>{students.filter((student) => student.classId === room.id && student.active).length}</td>
-                    <td>{room.active ? "פעילה" : "בארכיון"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {managesAll ? (
-          <div className="toolbar">
-            <input value={className} placeholder="שם כיתה, למשל ז׳3" onChange={(event) => setClassName(event.target.value)} />
-            <input value={grade} placeholder="שכבה" onChange={(event) => setGrade(event.target.value)} />
-            <Button disabled={!className.trim()} onClick={() => void addClass()}>
-              הוספת כיתה
-            </Button>
-          </div>
-        ) : null}
-      </section>
-
-      {managesAll ? <div className="desktop-only">
-      <ImportWizard
-        classes={visibleClasses}
-        students={students.filter((student) => visibleClasses.some((room) => room.id === student.classId))}
-        contacts={contacts}
-        canCreateClasses={managesAll}
-        onImported={async (message) => {
-          setInfo(message);
-          await load();
-        }}
-      />
-      </div> : null}
 
       <section className="stack">
         <h2 className="desktop-only">תלמידים</h2>
@@ -417,22 +314,6 @@ export function RosterPage() {
             <table className="data-table people-table">
               <thead>
                 <tr>
-                  {managesAll ? (
-                    <th>
-                      <label className="check-row">
-                        <input
-                          type="checkbox"
-                          aria-label="בחירת כל התלמידים"
-                          checked={rows.length > 0 && rows.every((student) => pickedStudents.includes(student.id))}
-                          onChange={() =>
-                            setPickedStudents(
-                              rows.every((student) => pickedStudents.includes(student.id)) ? [] : rows.map((student) => student.id),
-                            )
-                          }
-                        />
-                      </label>
-                    </th>
-                  ) : null}
                   <th>
                     <button type="button" onClick={() => toggleSort("name")}>
                       שם
@@ -453,7 +334,7 @@ export function RosterPage() {
                   const contact = contactMap.get(student.id);
                   const classLabel = classNames.get(student.classId) ?? "";
                   const previous = index > 0 ? classNames.get(rows[index - 1].classId) : "";
-                  const columns = 3 + (canSeePhones ? 2 : 0) + (managesAll ? 1 : 0);
+                  const columns = 3 + (canSeePhones ? 2 : 0);
                   return (
                     <Fragment key={student.id}>
                     {classLabel !== previous ? (
@@ -462,18 +343,6 @@ export function RosterPage() {
                       </tr>
                     ) : null}
                     <tr key={student.id}>
-                      {managesAll ? (
-                        <td>
-                          <label className="check-row">
-                            <input
-                              type="checkbox"
-                              aria-label={`בחירת ${student.firstName} ${student.lastName}`}
-                              checked={pickedStudents.includes(student.id)}
-                              onChange={() => togglePicked(pickedStudents, student.id, setPickedStudents)}
-                            />
-                          </label>
-                        </td>
-                      ) : null}
                       <td>
                         <button type="button" className="text-button" onClick={() => setOpenId(student.id)}>
                           {student.firstName} {student.lastName}
@@ -519,6 +388,78 @@ export function RosterPage() {
           </>
         )}
       </section>
+
+      <section className="panel stack">
+        <h2>כיתות</h2>
+        <div className="phone-only list">
+          {shownClasses.map((room) => (
+            <div key={room.id} className="person-card">
+              <span>
+                <b>{room.name}</b>
+                <span className="muted">{students.filter((student) => student.classId === room.id && student.active).length} תלמידים</span>
+              </span>
+              {managesAll ? <RowMenu onEdit={() => setOpenClassId(room.id)} onDelete={() => void askDeleteClass(room)} /> : null}
+            </div>
+          ))}
+        </div>
+        {visibleClasses.length === 0 ? (
+          <EmptyState title="אין עדיין כיתות" detail="הוסיפו את הכיתה הראשונה, למשל ז׳1. רק אחר כך אפשר לייבא תלמידים." />
+        ) : shownClasses.length === 0 ? (
+          <EmptyState title="כל הכיתות בארכיון" detail="סמנו הצגת ארכיון כדי לראות אותן ולשחזר." />
+        ) : (
+          <div className="table-scroll desktop-only">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>כיתה</th>
+                  <th>שכבה</th>
+                  <th>תלמידים</th>
+                  <th>מצב</th>
+                  {managesAll ? <th></th> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {shownClasses.map((room) => (
+                  <tr key={room.id}>
+                    <td>{room.name}</td>
+                    <td>{room.grade || "—"}</td>
+                    <td>{students.filter((student) => student.classId === room.id && student.active).length}</td>
+                    <td>{room.active ? "פעילה" : "בארכיון"}</td>
+                    {managesAll ? (
+                      <td>
+                        <RowMenu onEdit={() => setOpenClassId(room.id)} onDelete={() => void askDeleteClass(room)} />
+                      </td>
+                    ) : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {managesAll ? (
+          <div className="toolbar">
+            <input value={className} placeholder="שם כיתה, למשל ז׳3" onChange={(event) => setClassName(event.target.value)} />
+            <input value={grade} placeholder="שכבה" onChange={(event) => setGrade(event.target.value)} />
+            <Button disabled={!className.trim()} onClick={() => void addClass()}>
+              הוספת כיתה
+            </Button>
+          </div>
+        ) : null}
+      </section>
+
+      {managesAll ? <div className="desktop-only">
+      <ImportWizard
+        classes={visibleClasses}
+        students={students.filter((student) => visibleClasses.some((room) => room.id === student.classId))}
+        contacts={contacts}
+        canCreateClasses={managesAll}
+        onImported={async (message) => {
+          setInfo(message);
+          await load();
+        }}
+      />
+      </div> : null}
+
       {openId ? (
         <Sheet full title="תלמיד" onClose={() => setOpenId(null)}>
           {students.filter((student) => student.id === openId).map((student) => {
@@ -607,68 +548,21 @@ export function RosterPage() {
           })}
         </Sheet>
       ) : null}
-      {managesAll ? (
-        <div className="phone-only">
-          <Button variant="ghost" block onClick={() => setToolsOpen(true)}>
-            כיתות וייבוא
-          </Button>
-        </div>
-      ) : null}
-      {toolsOpen ? (
-        <Sheet title="כיתות וייבוא" onClose={() => setToolsOpen(false)}>
-          <div className="stack">
-            <div className="list">
-              {shownClasses.map((room) => (
-                <button key={room.id} type="button" className="person-card" onClick={() => setOpenClassId(room.id)}>
-                  <span>
-                    <b>{room.name}</b>
-                    <span className="muted">
-                      {room.active
-                        ? `${students.filter((student) => student.classId === room.id && student.active).length} תלמידים`
-                        : "בארכיון"}
-                    </span>
-                  </span>
-                  <span className="badge">{room.active ? "פעילה" : "בארכיון"}</span>
-                </button>
-              ))}
-            </div>
-            <div className="toolbar">
-              <input value={className} placeholder="שם כיתה, למשל ז׳3" onChange={(event) => setClassName(event.target.value)} />
-              <Button disabled={!className.trim()} onClick={() => void addClass()}>
-                הוספת כיתה
-              </Button>
-            </div>
-            <ImportWizard
-              classes={visibleClasses}
-              students={students}
-              contacts={contacts}
-              canCreateClasses={managesAll}
-              onImported={async (message) => {
-                setInfo(message);
-                setToolsOpen(false);
-                await load();
-              }}
-            />
-          </div>
-        </Sheet>
-      ) : null}
       {openClassId ? (
-        <Sheet full title="כיתה" onClose={() => setOpenClassId(null)}>
+        <Sheet compact title="עריכת כיתה" onClose={() => setOpenClassId(null)}>
           {visibleClasses
             .filter((room) => room.id === openClassId)
             .map((room) => (
-              <div key={room.id} className="stack">
-                <p>
-                  <strong>{room.name}</strong>
-                  <br />
-                  <span className="muted">
-                    {room.active ? "פעילה" : "בארכיון"} · {students.filter((student) => student.classId === room.id).length} תלמידים
-                  </span>
-                </p>
-                <Button variant="danger" onClick={() => void askDeleteClass(room)}>
-                  מחיקה לצמיתות
-                </Button>
-              </div>
+              <ClassEditor
+                key={room.id}
+                room={room}
+                onSaved={async () => {
+                  setInfo("הכיתה נשמרה");
+                  setOpenClassId(null);
+                  await load();
+                }}
+                onError={setError}
+              />
             ))}
         </Sheet>
       ) : null}
@@ -901,6 +795,46 @@ function AddStudent({ classes, onSaved }: { classes: ClassRoom[]; onSaved: () =>
         הוספת תלמיד
       </Button>
       </section>
+  );
+}
+
+function ClassEditor({
+  room,
+  onSaved,
+  onError,
+}: {
+  room: ClassRoom;
+  onSaved: () => Promise<void>;
+  onError: (message: string | null) => void;
+}) {
+  const [name, setName] = useState(room.name);
+  const [grade, setGrade] = useState(room.grade ?? "");
+  return (
+    <div className="stack">
+      <Field label="שם">
+        <input value={name} onChange={(event) => setName(event.target.value)} />
+      </Field>
+      <Field label="שכבה">
+        <input value={grade} onChange={(event) => setGrade(event.target.value)} />
+      </Field>
+      <Button
+        disabled={!name.trim()}
+        onClick={() =>
+          void getApi()
+            .saveClass({
+              id: room.id,
+              name: name.trim(),
+              grade: grade.trim(),
+              homeroomTeacherId: room.homeroomTeacherId,
+              active: room.active,
+            })
+            .then(onSaved)
+            .catch((err: unknown) => onError(err instanceof Error ? err.message : "השמירה נכשלה"))
+        }
+      >
+        שמירה
+      </Button>
+    </div>
   );
 }
 

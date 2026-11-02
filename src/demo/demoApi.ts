@@ -1,4 +1,5 @@
-import { jerusalemToday } from "../lib/dates";
+import { DEFAULT_DAY_ENDS } from "../api/types";
+import { defaultReleaseIso, jerusalemDow, jerusalemToday } from "../lib/dates";
 import { renderDetentionMessage } from "../lib/messages";
 import { normalizeIlPhone, whatsappCandidates } from "../lib/phone";
 import type {
@@ -105,6 +106,8 @@ function seed(): DemoState {
     settings: {
       schoolName: "בית הספר",
       allowedEmailDomain: null,
+      autoApproveDomain: null,
+      dayEnds: { ...DEFAULT_DAY_ENDS },
       notificationMode: "manual_link",
       whatsappPhoneNumberId: null,
       whatsappDisplayNumber: null,
@@ -400,16 +403,25 @@ export const demoApi: AppApi = {
     emitChange();
   },
 
+  async updateDayEnds(ends) {
+    const profile = requireUser();
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל יכול לעדכן הגדרות");
+    state.settings = { ...state.settings, dayEnds: { ...ends } };
+    emitChange();
+  },
+
   async accessStatus() {
     const profile = requireUser();
-    const domain = state.settings.allowedEmailDomain?.trim().toLowerCase() ?? "";
-    const listed = (state.allowedEmails ?? []).map((email) => email.toLowerCase());
-    const restricted = domain.length > 0 || listed.length > 0;
-    if (restricted) {
-      const email = profile.email.toLowerCase();
-      const domainOk = domain.length > 0 && email.endsWith(`@${domain}`);
-      if (!domainOk && !listed.includes(email)) return "denied";
+    const domain = state.settings.autoApproveDomain?.trim().toLowerCase() ?? "";
+    const emailDomain = profile.email.toLowerCase().split("@")[1] ?? "";
+    if (!profile.role && domain && emailDomain === domain) {
+      profile.role = "teacher";
+      profile.requestedRole = null;
+      profile.requestedClassIds = [];
+      emitSession();
+      emitChange();
     }
+    if (!profile.email) return "denied";
     return profile.role ? "ok" : "pending";
   },
 
@@ -769,7 +781,13 @@ export const demoApi: AppApi = {
       durationMinutes: input.durationMinutes,
       status: "pending",
       detentionDate: jerusalemToday(),
-      releaseAt: input.releaseAt ?? new Date(Date.now() + input.durationMinutes * 60000).toISOString(),
+      releaseAt:
+        input.releaseAt ??
+        defaultReleaseIso(
+          input.durationMinutes,
+          [state.settings.dayEnds.sun, state.settings.dayEnds.mon, state.settings.dayEnds.tue, state.settings.dayEnds.wed, state.settings.dayEnds.thu, state.settings.dayEnds.fri, state.settings.dayEnds.sat][jerusalemDow()] ?? null,
+        ) ??
+        new Date(Date.now() + input.durationMinutes * 60000).toISOString(),
       markedBy: profile.id,
       markedAt: new Date().toISOString(),
       signedBy: null,

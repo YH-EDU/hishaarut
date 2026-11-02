@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getApi } from "../api";
-import type { ClassRoom, Student } from "../api/types";
+import type { ClassRoom, Profile, Student } from "../api/types";
+import { ROLE_LABEL } from "../api/types";
+import { useAuth } from "../auth";
 import { PageHeader } from "../components/PageHeader";
-import { Banner, Empty, studentName } from "../components/ui";
+import { Banner, Button, Empty, studentName } from "../components/ui";
 import { classKey, classRank } from "../lib/csv";
 
 const RECENT_KEY = "hishaarut-recent";
@@ -25,6 +27,10 @@ export function rememberStudent(id: string) {
 export function SearchPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const role = useAuth().session?.profile.role;
+  const canApprove = role === "admin" || role === "secretary";
+  const [requests, setRequests] = useState<Profile[]>([]);
+  const [classesForRequests, setClassesForRequests] = useState<ClassRoom[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [query, setQuery] = useState("");
@@ -39,6 +45,17 @@ export function SearchPage() {
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.pathname, location.state, navigate]);
+
+  async function loadRequests() {
+    if (!canApprove) return;
+    const [profiles, rooms] = await Promise.all([getApi().listProfiles(), getApi().listClasses()]);
+    setRequests(profiles.filter((profile) => !profile.role && profile.requestedRole));
+    setClassesForRequests(rooms);
+  }
+
+  useEffect(() => {
+    void loadRequests().catch((err: unknown) => setError(err instanceof Error ? err.message : "אירעה שגיאה"));
+  }, [canApprove]);
 
   useEffect(() => {
     void Promise.all([getApi().listStudents(), getApi().listClasses()])
@@ -70,6 +87,51 @@ export function SearchPage() {
       <PageHeader title="סימון תלמיד" lede="מחפשים לפי שם או כיתה, בוחרים סיבה ומשך, ולוחצים סמן להשארות." />
       {flash ? <Banner>{flash}</Banner> : null}
       {error ? <Banner tone="danger">{error}</Banner> : null}
+      {requests.length > 0 ? (
+        <section className="panel stack">
+          <h2>בקשות לאישור · {requests.length}</h2>
+          {requests.map((profile) => {
+            if (!profile.requestedRole) return null;
+            const names = classesForRequests.filter((room) => profile.requestedClassIds.includes(room.id)).map((room) => room.name);
+            const requestedRole = profile.requestedRole;
+            return (
+              <div key={profile.id} className="spread">
+                <span>
+                  <b>{profile.fullName || profile.email}</b>
+                  <span className="muted">
+                    {" "}
+                    {profile.email} · {ROLE_LABEL[requestedRole]}
+                    {names.length > 0 ? ` · ${names.join(", ")}` : ""}
+                  </span>
+                </span>
+                <span className="row">
+                  <Button
+                    onClick={() =>
+                      void getApi()
+                        .approveStaffRequest(profile.id, requestedRole, profile.requestedClassIds)
+                        .then(loadRequests)
+                        .catch((err: unknown) => setError(err instanceof Error ? err.message : "האישור נכשל"))
+                    }
+                  >
+                    אישור
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      void getApi()
+                        .rejectStaffRequest(profile.id)
+                        .then(loadRequests)
+                        .catch((err: unknown) => setError(err instanceof Error ? err.message : "הדחייה נכשלה"))
+                    }
+                  >
+                    דחייה
+                  </Button>
+                </span>
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
       <div className="sticky-search">
         <input
           type="search"
