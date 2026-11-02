@@ -1,6 +1,6 @@
-import { DEFAULT_DAY_ENDS } from "../api/types";
-import { defaultReleaseIso, jerusalemDow, jerusalemToday } from "../lib/dates";
-import { renderDetentionMessage } from "../lib/messages";
+import { DAY_KEYS, DEFAULT_PARENT_TEMPLATE, DEFAULT_WEEK } from "../api/types";
+import { closedMarkingMessage, defaultReleaseIso, jerusalemClock, jerusalemDow, jerusalemToday, releaseClockAllowed, withinSchoolHours } from "../lib/dates";
+import { applyParentTemplate, renderDetentionMessage } from "../lib/messages";
 import { normalizeIlPhone, whatsappCandidates } from "../lib/phone";
 import type {
   AppApi,
@@ -32,7 +32,7 @@ interface DemoState {
   notifications: NotificationRow[];
 }
 
-const STORAGE_KEY = "hishaarut-demo-v2";
+const STORAGE_KEY = "hishaarut-demo-v3";
 
 function seed(): DemoState {
   const profiles: Profile[] = [
@@ -107,7 +107,9 @@ function seed(): DemoState {
       schoolName: "בית הספר",
       allowedEmailDomain: null,
       autoApproveDomain: null,
-      dayEnds: { ...DEFAULT_DAY_ENDS },
+      schedule: structuredClone(DEFAULT_WEEK),
+      closures: [],
+      parentMessageTemplate: DEFAULT_PARENT_TEMPLATE,
       notificationMode: "manual_link",
       whatsappPhoneNumberId: null,
       whatsappDisplayNumber: null,
@@ -179,10 +181,16 @@ function todayBoard(
       event: "marked",
       recipientType: "parent",
       channel: "whatsapp_link",
-      recipientLabel: contacts[student.id]?.parentName ?? "הורה",
+      recipientLabel: contacts[student.id]?.parentName ?? "אב",
       recipientPhone: phone ? `972${phone.slice(1)}` : null,
       fallbackPhones: [],
-      messageBody: `${student.firstName} ${student.lastName} נשאר היום.`,
+      messageBody: applyParentTemplate(DEFAULT_PARENT_TEMPLATE, {
+        parentName: contacts[student.id]?.parentName ?? null,
+        studentName: `${student.firstName} ${student.lastName}`,
+        className: room?.name ?? "",
+        releaseTime: jerusalemClock(new Date(now + minutes * 60000)),
+        reason: reasons[index % reasons.length],
+      }),
       status: phone ? "pending" : "skipped",
       sentAt: null,
       errorText: phone ? null : "no_phone",
@@ -266,48 +274,71 @@ function enqueue(detention: Detention, event: NotificationRow["event"]) {
   const contact = student ? state.contacts[student.id] : undefined;
   const marker = state.profiles.find((item) => item.id === detention.markedBy);
   const channel = state.settings.notificationMode === "cloud_api" ? "whatsapp_cloud" : "whatsapp_link";
-  const candidates = whatsappCandidates([
-    { phone: contact?.parentPhone, noWhatsapp: contact?.parentPhoneNoWhatsapp },
-    { phone: contact?.parentPhone2, noWhatsapp: contact?.parentPhone2NoWhatsapp },
-    { phone: contact?.parent2Phone, noWhatsapp: contact?.parent2PhoneNoWhatsapp },
-    { phone: contact?.parent2Phone2, noWhatsapp: contact?.parent2Phone2NoWhatsapp },
-  ]);
-  const parentPhone = candidates[0] ?? null;
-  const fallbackPhones = candidates.slice(1);
-  const rawPhones = [contact?.parentPhone, contact?.parentPhone2, contact?.parent2Phone, contact?.parent2Phone2];
-  const anyRaw = rawPhones.some((phone) => phone?.trim());
-  const anyValid = rawPhones.some((phone) => normalizeIlPhone(phone));
   const homeroomPhone = normalizeIlPhone(homeroom?.phone);
   const base = {
     event,
     channel,
     detentionId: detention.id,
   } as const;
-  const messageFor = (audience: NotificationRow["recipientType"]) =>
-    renderDetentionMessage({
-      event,
-      audience,
-      gender: student?.gender ?? null,
-      studentName: `${detention.studentFirstName} ${detention.studentLastName}`,
-      className: detention.className,
-      reason: detention.reasonText,
-      minutes: detention.durationMinutes,
-      school: state.settings.schoolName,
-      markerName: marker?.fullName ?? "",
-    });
-
-  const parent: NotificationRow = {
-    ...base,
-    id: crypto.randomUUID(),
-    recipientType: "parent",
-    recipientLabel: contact?.parentName || "הורה",
-    recipientPhone: parentPhone,
-    fallbackPhones,
-    messageBody: messageFor("parent"),
-    status: parentPhone ? "pending" : "skipped",
-    sentAt: null,
-    errorText: parentPhone ? null : !anyRaw ? "no_phone" : anyValid ? "no_whatsapp" : "invalid_phone",
-  };
+  const homeroomMessage = renderDetentionMessage({
+    event,
+    audience: "homeroom",
+    gender: student?.gender ?? null,
+    studentName: `${detention.studentFirstName} ${detention.studentLastName}`,
+    className: detention.className,
+    reason: detention.reasonText,
+    minutes: detention.durationMinutes,
+    school: state.settings.schoolName,
+    markerName: marker?.fullName ?? "",
+  });
+  const releaseLabel = jerusalemClock(new Date(detention.releaseAt));
+  const parentNotes = (
+    [
+      ["father", contact?.parentName ?? null, contact?.parentPhone ?? null, contact?.parentPhone2 ?? null, contact?.parentPhoneNoWhatsapp, contact?.parentPhone2NoWhatsapp],
+      ["mother", contact?.parent2Name ?? null, contact?.parent2Phone ?? null, contact?.parent2Phone2 ?? null, contact?.parent2PhoneNoWhatsapp, contact?.parent2Phone2NoWhatsapp],
+    ] as const
+  ).flatMap(([slot, name, phone, phone2, off, off2]) => {
+    const hasRaw = Boolean(phone?.trim() || phone2?.trim() || name?.trim());
+    if (!hasRaw) return [];
+    const candidates = whatsappCandidates([
+      { phone, noWhatsapp: off },
+      { phone: phone2, noWhatsapp: off2 },
+    ]);
+    const anyValid = [phone, phone2].some((item) => normalizeIlPhone(item));
+    const markedBody =
+      event === "marked"
+        ? applyParentTemplate(state.settings.parentMessageTemplate, {
+            parentName: name,
+            studentName: `${detention.studentFirstName} ${detention.studentLastName}`,
+            className: detention.className,
+            releaseTime: releaseLabel,
+            reason: detention.reasonText,
+          })
+        : renderDetentionMessage({
+            event,
+            audience: "parent",
+            gender: student?.gender ?? null,
+            studentName: `${detention.studentFirstName} ${detention.studentLastName}`,
+            className: detention.className,
+            reason: detention.reasonText,
+            minutes: detention.durationMinutes,
+            school: state.settings.schoolName,
+            markerName: marker?.fullName ?? "",
+          });
+    const note: NotificationRow = {
+      ...base,
+      id: crypto.randomUUID(),
+      recipientType: "parent",
+      recipientLabel: name?.trim() || (slot === "father" ? "אב" : "אם"),
+      recipientPhone: candidates[0] ?? null,
+      fallbackPhones: candidates.slice(1),
+      messageBody: markedBody,
+      status: candidates[0] ? "pending" : "skipped",
+      sentAt: null,
+      errorText: candidates[0] ? null : phone?.trim() || phone2?.trim() ? (anyValid ? "no_whatsapp" : "invalid_phone") : "no_phone",
+    };
+    return [note];
+  });
   let homeroomError: string | null = null;
   let homeroomStatus: NotificationRow["status"] = "pending";
   let storedHomeroomPhone: string | null = homeroomPhone;
@@ -329,12 +360,12 @@ function enqueue(detention: Detention, event: NotificationRow["event"]) {
     recipientType: "homeroom",
     recipientLabel: homeroom?.fullName || "מחנך/ת",
     recipientPhone: storedHomeroomPhone,
-    messageBody: messageFor("homeroom"),
+    messageBody: homeroomMessage,
     status: homeroomStatus,
     sentAt: null,
     errorText: homeroomError,
   };
-  state.notifications.push(parent, homeroomNote);
+  state.notifications.push(...parentNotes, homeroomNote);
 }
 
 function visibleDetention(detention: Detention, profile: Profile): Detention | null {
@@ -399,14 +430,42 @@ export const demoApi: AppApi = {
   async updateSettings(patch) {
     const profile = requireUser();
     if (profile.role !== "admin") throw new Error("רק מנהל יכול לעדכן הגדרות");
-    state.settings = { ...patch };
+    state.settings = {
+      ...patch,
+      schedule: state.settings.schedule,
+      closures: state.settings.closures,
+      parentMessageTemplate: state.settings.parentMessageTemplate,
+    };
     emitChange();
   },
 
-  async updateDayEnds(ends) {
+  async updateSchedule(schedule) {
     const profile = requireUser();
     if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל יכול לעדכן הגדרות");
-    state.settings = { ...state.settings, dayEnds: { ...ends } };
+    state.settings = { ...state.settings, schedule: structuredClone(schedule) };
+    emitChange();
+  },
+
+  async updateParentTemplate(template) {
+    const profile = requireUser();
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל יכול לעדכן הגדרות");
+    state.settings = { ...state.settings, parentMessageTemplate: template.trim() || DEFAULT_PARENT_TEMPLATE };
+    emitChange();
+  },
+
+  async addClosure(date) {
+    const profile = requireUser();
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל יכול לעדכן הגדרות");
+    if (!state.settings.closures.includes(date)) {
+      state.settings = { ...state.settings, closures: [...state.settings.closures, date].sort() };
+    }
+    emitChange();
+  },
+
+  async removeClosure(date) {
+    const profile = requireUser();
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל יכול לעדכן הגדרות");
+    state.settings = { ...state.settings, closures: state.settings.closures.filter((item) => item !== date) };
     emitChange();
   },
 
@@ -772,7 +831,20 @@ export const demoApi: AppApi = {
       reasonText = reason.label;
     }
     if (!reasonText) throw new Error("יש לבחור סיבה");
+    const todayKey = DAY_KEYS[jerusalemDow()];
+    const todayHours = state.settings.schedule[todayKey];
+    const sample = DAY_KEYS.map((key) => state.settings.schedule[key]).find((day) => day.start && day.end) ?? { start: "07:00", end: "16:00" };
+    const messageHours = todayHours.start && todayHours.end ? todayHours : sample;
+    const open = !state.settings.closures.includes(jerusalemToday()) && withinSchoolHours(todayHours.start, todayHours.end);
+    if (!open) {
+      throw new Error(closedMarkingMessage(messageHours.start ?? "07:00", messageHours.end ?? "16:00"));
+    }
     const room = state.classes.find((item) => item.id === student.classId);
+    const computedRelease =
+      defaultReleaseIso(input.durationMinutes, todayHours.end) ?? new Date(Date.now() + input.durationMinutes * 60000).toISOString();
+    if (input.releaseAt && todayHours.end && !releaseClockAllowed(jerusalemClock(new Date(input.releaseAt)), todayHours.end)) {
+      throw new Error("שעת היציאה יכולה להיות מסיום הלימודים ועד שלוש שעות אחריו, באותו היום");
+    }
     const detention: Detention = {
       id: crypto.randomUUID(),
       studentId: student.id,
@@ -781,13 +853,7 @@ export const demoApi: AppApi = {
       durationMinutes: input.durationMinutes,
       status: "pending",
       detentionDate: jerusalemToday(),
-      releaseAt:
-        input.releaseAt ??
-        defaultReleaseIso(
-          input.durationMinutes,
-          [state.settings.dayEnds.sun, state.settings.dayEnds.mon, state.settings.dayEnds.tue, state.settings.dayEnds.wed, state.settings.dayEnds.thu, state.settings.dayEnds.fri, state.settings.dayEnds.sat][jerusalemDow()] ?? null,
-        ) ??
-        new Date(Date.now() + input.durationMinutes * 60000).toISOString(),
+      releaseAt: input.releaseAt ?? computedRelease,
       markedBy: profile.id,
       markedAt: new Date().toISOString(),
       signedBy: null,

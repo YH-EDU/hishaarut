@@ -536,6 +536,32 @@ details.preview pre { white-space: pre-wrap; font: inherit; margin: 8px 0 0; }
 }
 .row-menu-pop button.danger { color: var(--danger); }
 .day-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.hours-grid { display: grid; gap: 8px; }
+.hours-grid-head, .hours-row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.hours-grid-head { color: var(--muted); font-size: 0.85rem; }
+.hours-row input, .hours-grid input[type="time"] { width: 100%; min-height: 44px; }
+.closure-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.placeholder-list { margin: 0; padding-inline-start: 1.1rem; color: var(--muted); }
+.placeholder-list li { margin: 2px 0; }
+.message-preview {
+  white-space: pre-wrap;
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0;
+  line-height: 1.5;
+}
 .owner-badge {
   display: inline-block;
   margin-inline-start: 8px;

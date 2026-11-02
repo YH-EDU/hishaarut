@@ -170,7 +170,7 @@ export function DashboardPage() {
   }
 
   function parentNote(row: Detention) {
-    return notes.find((note) => note.detentionId === row.id && note.recipientType === "parent" && note.event === "marked");
+    return notes.find((note) => note.detentionId === row.id && note.recipientType === "parent" && note.event === "marked" && note.recipientPhone);
   }
 
   function whatsappLink(row: Detention) {

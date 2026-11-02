@@ -23,25 +23,39 @@ export interface SessionState {
   profile: Profile;
 }
 
-export interface DayEnds {
-  sun: string | null;
-  mon: string | null;
-  tue: string | null;
-  wed: string | null;
-  thu: string | null;
-  fri: string | null;
-  sat: string | null;
+export interface DayHours {
+  start: string | null;
+  end: string | null;
 }
 
-export const DEFAULT_DAY_ENDS: DayEnds = {
-  sun: "16:00",
-  mon: "16:00",
-  tue: "14:00",
-  wed: "16:00",
-  thu: "16:00",
-  fri: "12:00",
-  sat: null,
+export interface WeekSchedule {
+  sun: DayHours;
+  mon: DayHours;
+  tue: DayHours;
+  wed: DayHours;
+  thu: DayHours;
+  fri: DayHours;
+  sat: DayHours;
+}
+
+export const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+export type DayKey = (typeof DAY_KEYS)[number];
+
+export const DEFAULT_WEEK: WeekSchedule = {
+  sun: { start: "07:00", end: "16:00" },
+  mon: { start: "07:00", end: "16:00" },
+  tue: { start: "07:00", end: "14:00" },
+  wed: { start: "07:00", end: "16:00" },
+  thu: { start: "07:00", end: "16:00" },
+  fri: { start: "07:00", end: "12:00" },
+  sat: { start: null, end: null },
 };
+
+export const DEFAULT_PARENT_TEMPLATE = `שלום {parent_name},
+רצינו לעדכן שבנך {student_name} מכיתה {class} יישאר היום בבית הספר לאחר סיום הלימודים, עד השעה {release_time}.
+סיבה: {reason}
+לשאלות אפשר לפנות למזכירות.
+בברכה, צוות הישיבה`;
 
 export interface SchoolSettings {
   schoolName: string;
@@ -50,7 +64,9 @@ export interface SchoolSettings {
   notificationMode: NotificationMode;
   whatsappPhoneNumberId: string | null;
   whatsappDisplayNumber: string | null;
-  dayEnds: DayEnds;
+  schedule: WeekSchedule;
+  closures: string[];
+  parentMessageTemplate: string;
 }
 
 export type AccessStatus = "ok" | "pending" | "denied";
@@ -192,7 +208,10 @@ export interface AppApi {
   updateOwnProfile(patch: { fullName: string; phone: string }): Promise<void>;
   getSettings(): Promise<SchoolSettings>;
   updateSettings(patch: SchoolSettings): Promise<void>;
-  updateDayEnds(ends: DayEnds): Promise<void>;
+  updateSchedule(schedule: WeekSchedule): Promise<void>;
+  updateParentTemplate(template: string): Promise<void>;
+  addClosure(date: string): Promise<void>;
+  removeClosure(date: string): Promise<void>;
   accessStatus(): Promise<AccessStatus>;
   listAllowedEmails(): Promise<string[]>;
   setAllowedEmails(emails: string[]): Promise<void>;
