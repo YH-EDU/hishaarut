@@ -20,6 +20,16 @@ update public.classes set homeroom_teacher_id = '30000000-0000-0000-0000-0000000
 update public.classes set homeroom_teacher_id = '30000000-0000-0000-0000-000000000006'
   where id = '10000000-0000-0000-0000-000000000002';
 
+-- Keep the suite able to mark at any hour. The hours cases at the end restore the real week.
+update public.school_settings set
+  start_sun = '00:00', end_sun = '23:59',
+  start_mon = '00:00', end_mon = '23:59',
+  start_tue = '00:00', end_tue = '23:59',
+  start_wed = '00:00', end_wed = '23:59',
+  start_thu = '00:00', end_thu = '23:59',
+  start_fri = '00:00', end_fri = '23:59',
+  start_sat = '00:00', end_sat = '23:59';
+
 do $$
 begin
   if (select count(*) from public.students) <> 15 then
@@ -159,13 +169,23 @@ begin
   select n.message_body, n.recipient_phone, n.status
   into parent_body, parent_phone, parent_status
   from public.notification_log n
-  where n.detention_id = detention and n.event = 'marked' and n.recipient_type = 'parent';
+  where n.detention_id = detention and n.event = 'marked' and n.recipient_type = 'parent' and n.audience = 'father';
 
   if parent_status <> 'pending' or parent_phone <> '972507000001' then
     raise exception 'parent notification was not queued';
   end if;
-  if parent_body <> E'שלום, הודעה מבית הספר:\nנועה ברק נשארה היום אחרי שעות הלימודים.\nסיבה: הפרעה בשיעור\nמשך: 30 דקות.' then
+  if parent_body <> public.apply_parent_template(
+    null,
+    'מיכל ברק',
+    'נועה ברק',
+    'ז׳1',
+    to_char(timezone('Asia/Jerusalem', (select release_at from public.detentions where id = detention)), 'HH24:MI'),
+    'הפרעה בשיעור'
+  ) then
     raise exception 'unexpected parent message: %', parent_body;
+  end if;
+  if parent_body not like 'שלום מיכל ברק,%' or parent_body not like '%בברכה, צוות הישיבה%' then
+    raise exception 'parent message missed the greeting or the sign-off: %', parent_body;
   end if;
 
   select n.recipient_phone, n.status
@@ -669,11 +689,11 @@ begin
     raise exception 'secretary changed school settings';
   exception
     when others then
-      if sqlerrm not like '%מזכירות יכולה לעדכן רק את שעות סיום הלימודים%' then
+      if sqlerrm not like '%מזכירות יכולה לעדכן רק את שעות הלימודים ואת נוסח ההודעה להורים%' then
         raise;
       end if;
   end;
-  update public.school_settings set end_fri = '12:30' where id = 1;
+  update public.school_settings set end_fri = '12:30', start_fri = '07:15' where id = 1;
   get diagnostics n = row_count;
   if n <> 1 then
     raise exception 'secretary could not update the Friday end time';
@@ -1202,29 +1222,122 @@ exception
 end $$;
 reset role;
 
--- Release time follows the school day, not the clock at the moment of marking.
+-- Real school week: 07:00 until the bell. Saturday is closed.
+select set_config('request.jwt.claim.sub', '', false);
+update public.school_settings set
+  start_sun = '07:00', end_sun = '16:00',
+  start_mon = '07:00', end_mon = '16:00',
+  start_tue = '07:00', end_tue = '14:00',
+  start_wed = '07:00', end_wed = '16:00',
+  start_thu = '07:00', end_thu = '16:00',
+  start_fri = '07:00', end_fri = '12:00',
+  start_sat = null, end_sat = null;
+delete from public.school_closures;
+
 do $$
 declare
   tuesday timestamptz := timestamptz '2026-11-03 10:00:00+02';
+  early timestamptz := timestamptz '2026-11-03 06:30:00+02';
   late timestamptz := timestamptz '2026-11-03 15:00:00+02';
   saturday timestamptz := timestamptz '2026-11-07 10:00:00+02';
   shown text;
+  long_one text;
 begin
   shown := to_char(timezone('Asia/Jerusalem', public.default_release_at(tuesday, 30)), 'YYYY-MM-DD HH24:MI');
   if shown <> '2026-11-03 14:30' then
     raise exception 'tuesday release should be 14:30, got %', shown;
   end if;
-  shown := to_char(timezone('Asia/Jerusalem', public.default_release_at(late, 30)), 'HH24:MI');
-  if shown <> '15:30' then
-    raise exception 'after the bell, release should be now plus duration, got %', shown;
+  long_one := to_char(timezone('Asia/Jerusalem', public.default_release_at(tuesday, 240)), 'HH24:MI');
+  if long_one <> '17:00' then
+    raise exception 'release should cap three hours after the bell, got %', long_one;
   end if;
+  begin
+    perform public.default_release_at(early, 30);
+    raise exception 'before the school day should be refused';
+  exception
+    when others then
+      if sqlerrm not like '%סימון השארות פתוח בימי לימודים בין 07:00 ל-14:00%' then
+        raise;
+      end if;
+  end;
+  begin
+    perform public.default_release_at(late, 30);
+    raise exception 'after the bell should be refused';
+  exception
+    when others then
+      if sqlerrm not like '%בין 07:00 ל-14:00%' then
+        raise;
+      end if;
+  end;
   begin
     perform public.default_release_at(saturday, 30);
     raise exception 'saturday should have no school';
   exception
     when others then
-      if sqlerrm not like '%אין לימודים ביום זה%' then
+      if sqlerrm not like '%בין 07:00 ל-16:00%' then
         raise;
       end if;
   end;
+end $$;
+
+insert into public.school_closures (closure_date) values (date '2026-11-03');
+do $$
+begin
+  perform public.default_release_at(timestamptz '2026-11-03 10:00:00+02', 30);
+  raise exception 'a holiday should refuse a mark';
+exception
+  when others then
+    if sqlerrm not like '%בין 07:00 ל-14:00%' then
+      raise;
+    end if;
+end $$;
+delete from public.school_closures;
+
+-- A missing parent name opens with שלום, and the mother gets her own text.
+do $$
+declare
+  father text;
+  mother text;
+begin
+  father := public.apply_parent_template(null, null, 'יוסף לוי', 'ז׳1', '16:30', 'איחור');
+  if father not like 'שלום,%' or father like 'שלום שלום%' then
+    raise exception 'missing name should fall back to שלום, got %', father;
+  end if;
+  mother := public.apply_parent_template(null, 'רחל לוי', 'יוסף לוי', 'ז׳1', '16:30', 'איחור');
+  if mother not like 'שלום רחל לוי,%' then
+    raise exception 'mother should be addressed by name, got %', mother;
+  end if;
+  if father = mother then
+    raise exception 'father and mother messages should differ';
+  end if;
+end $$;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+begin
+  insert into public.school_closures (closure_date) values (date '2026-12-01');
+  raise exception 'teacher added a holiday';
+exception
+  when others then
+    if sqlerrm not like '%row-level security%' then
+      raise;
+    end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000004', false);
+set role authenticated;
+insert into public.school_closures (closure_date) values (date '2026-12-01');
+update public.school_settings set parent_message_template = 'שלום {parent_name}' where id = 1;
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+do $$
+begin
+  if not exists (select 1 from public.school_closures where closure_date = date '2026-12-01') then
+    raise exception 'secretary could not add a holiday';
+  end if;
+  if (select parent_message_template from public.school_settings where id = 1) <> 'שלום {parent_name}' then
+    raise exception 'secretary could not save the parent message';
+  end if;
 end $$;

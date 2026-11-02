@@ -1,11 +1,12 @@
 import { asError } from "../lib/errors";
+import { DEFAULT_PARENT_TEMPLATE, DEFAULT_WEEK } from "./types";
 import { pagesRedirectUrl } from "../lib/supabaseKey";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import type {
   AppApi,
   ClassInput,
   ClassRoom,
-  DayEnds,
+  WeekSchedule,
   Detention,
   DetentionInput,
   DetentionQuery,
@@ -47,6 +48,14 @@ interface SettingsRow {
   end_thu?: string | null;
   end_fri?: string | null;
   end_sat?: string | null;
+  start_sun?: string | null;
+  start_mon?: string | null;
+  start_tue?: string | null;
+  start_wed?: string | null;
+  start_thu?: string | null;
+  start_fri?: string | null;
+  start_sat?: string | null;
+  parent_message_template?: string | null;
 }
 
 function clock(value: string | null | undefined): string | null {
@@ -54,15 +63,24 @@ function clock(value: string | null | undefined): string | null {
   return value.slice(0, 5);
 }
 
-function dayEndsFrom(row: SettingsRow): DayEnds {
+function scheduleFrom(row: SettingsRow): WeekSchedule {
+  const day = (start: string | null | undefined, end: string | null | undefined, fallback: WeekSchedule[keyof WeekSchedule]): WeekSchedule[keyof WeekSchedule] => {
+    const endClock = clock(end);
+    const startClock = clock(start);
+    if (!endClock && !startClock) return { start: null, end: null };
+    return {
+      start: startClock ?? fallback.start,
+      end: endClock ?? fallback.end,
+    };
+  };
   return {
-    sun: clock(row.end_sun) ?? "16:00",
-    mon: clock(row.end_mon) ?? "16:00",
-    tue: clock(row.end_tue) ?? "14:00",
-    wed: clock(row.end_wed) ?? "16:00",
-    thu: clock(row.end_thu) ?? "16:00",
-    fri: clock(row.end_fri) ?? "12:00",
-    sat: clock(row.end_sat),
+    sun: day(row.start_sun, row.end_sun, DEFAULT_WEEK.sun),
+    mon: day(row.start_mon, row.end_mon, DEFAULT_WEEK.mon),
+    tue: day(row.start_tue, row.end_tue, DEFAULT_WEEK.tue),
+    wed: day(row.start_wed, row.end_wed, DEFAULT_WEEK.wed),
+    thu: day(row.start_thu, row.end_thu, DEFAULT_WEEK.thu),
+    fri: day(row.start_fri, row.end_fri, DEFAULT_WEEK.fri),
+    sat: day(row.start_sat, row.end_sat, DEFAULT_WEEK.sat),
   };
 }
 
@@ -181,7 +199,9 @@ function mapSettings(row: SettingsRow): SchoolSettings {
     allowedEmailDomain: row.allowed_domain ?? row.allowed_email_domain,
     autoApproveDomain: row.auto_approve_domain ?? null,
     notificationMode: row.notification_mode,
-    dayEnds: dayEndsFrom(row),
+    schedule: scheduleFrom(row),
+    closures: [],
+    parentMessageTemplate: row.parent_message_template?.trim() || DEFAULT_PARENT_TEMPLATE,
     whatsappPhoneNumberId: row.whatsapp_phone_number_id,
     whatsappDisplayNumber: row.whatsapp_display_number,
   };
@@ -376,15 +396,20 @@ export const supabaseApi: AppApi = {
   },
 
   async getSettings() {
-    const { data, error } = await client()
+    const settingsQuery = client()
       .from("school_settings")
       .select(
-        "school_name, allowed_email_domain, allowed_domain, auto_approve_domain, notification_mode, whatsapp_phone_number_id, whatsapp_display_number, end_sun, end_mon, end_tue, end_wed, end_thu, end_fri, end_sat",
+        "school_name, allowed_email_domain, allowed_domain, auto_approve_domain, notification_mode, whatsapp_phone_number_id, whatsapp_display_number, end_sun, end_mon, end_tue, end_wed, end_thu, end_fri, end_sat, start_sun, start_mon, start_tue, start_wed, start_thu, start_fri, start_sat, parent_message_template",
       )
       .eq("id", 1)
       .single();
+    const closuresQuery = client().from("school_closures").select("closure_date").order("closure_date");
+    const [{ data, error }, closures] = await Promise.all([settingsQuery, closuresQuery]);
     if (error) throw asError(error);
-    return mapSettings(data as SettingsRow);
+    if (closures.error) throw asError(closures.error);
+    const settings = mapSettings(data as SettingsRow);
+    settings.closures = (closures.data ?? []).map((row) => String((row as { closure_date: string }).closure_date).slice(0, 10));
+    return settings;
   },
 
   async updateSettings(patch) {
@@ -396,13 +421,6 @@ export const supabaseApi: AppApi = {
         allowed_domain: patch.allowedEmailDomain,
         auto_approve_domain: patch.autoApproveDomain,
         notification_mode: patch.notificationMode,
-        end_sun: patch.dayEnds.sun,
-        end_mon: patch.dayEnds.mon,
-        end_tue: patch.dayEnds.tue,
-        end_wed: patch.dayEnds.wed,
-        end_thu: patch.dayEnds.thu,
-        end_fri: patch.dayEnds.fri,
-        end_sat: patch.dayEnds.sat,
         whatsapp_phone_number_id: patch.whatsappPhoneNumberId,
         whatsapp_display_number: patch.whatsappDisplayNumber,
       })
@@ -411,21 +429,47 @@ export const supabaseApi: AppApi = {
     requireRows(data as { id: string }[] | null, error);
   },
 
-  async updateDayEnds(ends) {
+  async updateSchedule(schedule) {
     const { data, error } = await client()
       .from("school_settings")
       .update({
-        end_sun: ends.sun,
-        end_mon: ends.mon,
-        end_tue: ends.tue,
-        end_wed: ends.wed,
-        end_thu: ends.thu,
-        end_fri: ends.fri,
-        end_sat: ends.sat,
+        start_sun: schedule.sun.start,
+        start_mon: schedule.mon.start,
+        start_tue: schedule.tue.start,
+        start_wed: schedule.wed.start,
+        start_thu: schedule.thu.start,
+        start_fri: schedule.fri.start,
+        start_sat: schedule.sat.start,
+        end_sun: schedule.sun.end,
+        end_mon: schedule.mon.end,
+        end_tue: schedule.tue.end,
+        end_wed: schedule.wed.end,
+        end_thu: schedule.thu.end,
+        end_fri: schedule.fri.end,
+        end_sat: schedule.sat.end,
       })
       .eq("id", 1)
       .select("id");
     requireRows(data as { id: string }[] | null, error);
+  },
+
+  async updateParentTemplate(template) {
+    const { data, error } = await client()
+      .from("school_settings")
+      .update({ parent_message_template: template.trim() || null })
+      .eq("id", 1)
+      .select("id");
+    requireRows(data as { id: string }[] | null, error);
+  },
+
+  async addClosure(date) {
+    const { error } = await client().from("school_closures").insert({ closure_date: date });
+    if (error) throw asError(error);
+  },
+
+  async removeClosure(date) {
+    const { error } = await client().from("school_closures").delete().eq("closure_date", date);
+    if (error) throw asError(error);
   },
 
   async accessStatus() {

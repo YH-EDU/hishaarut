@@ -21,6 +21,7 @@ sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260307000000_onboarding_owner.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260308000000_open_signin.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260309000000_school_day_ends.sql
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260310000000_school_hours_message.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/seed.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f scripts/test-rls.sql
 echo "RLS checks passed"

@@ -35,15 +35,44 @@ export function jerusalemDow(now = new Date()): number {
   return index < 0 ? 0 : index;
 }
 
-/**
- * Detention starts at the school day's end, unless it is marked after that time.
- * Returns null when that weekday has no school.
- */
+/** Release is the school day's end plus the duration, and never later than three hours or the end of that day. */
+export const RELEASE_CAP_MINUTES = 180;
+
+export function clockOf(value: string): string {
+  return value.slice(0, 5);
+}
+
+export function addClock(hhmm: string, minutes: number): string {
+  const [hour, minute] = clockOf(hhmm).split(":").map(Number);
+  const total = Math.min(hour * 60 + minute + minutes, 23 * 60 + 59);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+export function withinSchoolHours(start: string | null, end: string | null, now = new Date()): boolean {
+  if (!start || !end) return false;
+  const clock = jerusalemClock(now);
+  return clock >= clockOf(start) && clock < clockOf(end);
+}
+
+export function closedMarkingMessage(start: string, end: string): string {
+  return `סימון השארות פתוח בימי לימודים בין ${clockOf(start)} ל-${clockOf(end)}`;
+}
+
+export function releaseClockAllowed(value: string, end: string): boolean {
+  const clock = clockOf(value);
+  return clock >= clockOf(end) && clock <= addClock(end, RELEASE_CAP_MINUTES);
+}
+
 export function defaultReleaseIso(durationMinutes: number, endTime: string | null, now = new Date()): string | null {
   if (!endTime) return null;
-  const endMs = new Date(jerusalemDateTimeIso(endTime.slice(0, 5), now)).getTime();
-  const start = now.getTime() > endMs ? now.getTime() : endMs;
-  return new Date(start + durationMinutes * 60000).toISOString();
+  const endMs = new Date(jerusalemDateTimeIso(clockOf(endTime), now)).getTime();
+  const capMs = endMs + RELEASE_CAP_MINUTES * 60000;
+  const dayEndMs = new Date(jerusalemDateTimeIso("23:59", now)).getTime();
+  let release = endMs + durationMinutes * 60000;
+  if (release > capMs) release = capMs;
+  if (release > dayEndMs) release = dayEndMs;
+  if (release < endMs) release = endMs;
+  return new Date(release).toISOString();
 }
 
 /** ISO timestamp for a clock time on today's Jerusalem date. */

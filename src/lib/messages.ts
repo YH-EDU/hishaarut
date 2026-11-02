@@ -1,4 +1,30 @@
-import type { Gender, NotificationEvent, RecipientType } from "../api/types";
+import { DEFAULT_PARENT_TEMPLATE, type Gender, type NotificationEvent, type RecipientType } from "../api/types";
+
+export interface ParentTemplateValues {
+  parentName: string | null;
+  studentName: string;
+  className: string;
+  releaseTime: string;
+  reason: string;
+}
+
+/** Fills the parent WhatsApp template. A missing name becomes the greeting שלום, without doubling it. */
+export function applyParentTemplate(template: string | null | undefined, values: ParentTemplateValues): string {
+  const source = template?.trim() ? template : DEFAULT_PARENT_TEMPLATE;
+  const name = values.parentName?.trim() ?? "";
+  let body = source;
+  if (!name) {
+    body = body.replaceAll("שלום {parent_name}", "שלום");
+    body = body.replaceAll("{parent_name}", "שלום");
+  } else {
+    body = body.replaceAll("{parent_name}", name);
+  }
+  return body
+    .replaceAll("{student_name}", values.studentName)
+    .replaceAll("{class}", values.className)
+    .replaceAll("{release_time}", values.releaseTime)
+    .replaceAll("{reason}", values.reason);
+}
 
 /**
  * Hebrew WhatsApp copy. The database function render_detention_message is the

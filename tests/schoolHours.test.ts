@@ -1,0 +1,56 @@
+import { describe, expect, it } from "vitest";
+import { DEFAULT_PARENT_TEMPLATE } from "../src/api/types";
+import { addClock, closedMarkingMessage, defaultReleaseIso, releaseClockAllowed, withinSchoolHours } from "../src/lib/dates";
+import { applyParentTemplate } from "../src/lib/messages";
+
+describe("school hours", () => {
+  const during = new Date("2026-11-02T08:00:00+02:00");
+  const after = new Date("2026-11-02T18:00:00+02:00");
+
+  it("allows a mark only from the start until the bell", () => {
+    expect(withinSchoolHours("07:00", "16:00", during)).toBe(true);
+    expect(withinSchoolHours("07:00", "16:00", after)).toBe(false);
+    expect(withinSchoolHours("07:00", "16:00", new Date("2026-11-02T07:00:00+02:00"))).toBe(true);
+    expect(withinSchoolHours("07:00", "16:00", new Date("2026-11-02T16:00:00+02:00"))).toBe(false);
+    expect(withinSchoolHours(null, null, during)).toBe(false);
+  });
+
+  it("caps the release three hours after the bell", () => {
+    const release = defaultReleaseIso(240, "14:00", during);
+    expect(release && new Date(release).toISOString()).toBe(new Date("2026-11-02T17:00:00+02:00").toISOString());
+    expect(addClock("22:30", 180)).toBe("23:59");
+    expect(releaseClockAllowed("17:00", "14:00")).toBe(true);
+    expect(releaseClockAllowed("13:30", "14:00")).toBe(false);
+    expect(releaseClockAllowed("18:00", "14:00")).toBe(false);
+  });
+
+  it("states the open hours", () => {
+    expect(closedMarkingMessage("07:00", "16:00")).toBe("סימון השארות פתוח בימי לימודים בין 07:00 ל-16:00");
+  });
+});
+
+describe("parent template", () => {
+  it("addresses each parent and falls back to שלום", () => {
+    const father = applyParentTemplate(DEFAULT_PARENT_TEMPLATE, {
+      parentName: "דוד כהן",
+      studentName: "יוסף לוי",
+      className: "ז׳1",
+      releaseTime: "16:30",
+      reason: "הפרעה בשיעור",
+    });
+    const unnamed = applyParentTemplate(DEFAULT_PARENT_TEMPLATE, {
+      parentName: "  ",
+      studentName: "יוסף לוי",
+      className: "ז׳1",
+      releaseTime: "16:30",
+      reason: "הפרעה בשיעור",
+    });
+    expect(father.startsWith("שלום דוד כהן,")).toBe(true);
+    expect(father).toContain("בנך יוסף לוי מכיתה ז׳1");
+    expect(father).toContain("עד השעה 16:30");
+    expect(father).toContain("סיבה: הפרעה בשיעור");
+    expect(unnamed.startsWith("שלום,")).toBe(true);
+    expect(unnamed.startsWith("שלום שלום")).toBe(false);
+    expect(father).not.toBe(unnamed);
+  });
+});
