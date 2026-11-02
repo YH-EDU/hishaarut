@@ -460,29 +460,54 @@ begin
   end if;
 end $$;
 
--- Domain or allowlist, checked on every request. Off until one of them is set.
+-- A private Gmail account can ask for a role, but sees no school data until approved.
 select set_config('request.jwt.claim.sub', '', false);
 update public.school_settings
-set allowed_email_domain = 'school.test', allowed_domain = 'school.test'
+set allowed_email_domain = 'school.test', allowed_domain = 'school.test', auto_approve_domain = null
 where id = 1;
 insert into auth.users (id, email, raw_user_meta_data)
 values
   ('30000000-0000-0000-0000-000000000099', 'person@gmail.com', '{}'),
   ('30000000-0000-0000-0000-000000000098', 'person@school.test', '{"name":"תלמיד מורה"}');
-update public.profiles set role = 'teacher' where id = '30000000-0000-0000-0000-000000000099';
 
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000099', false);
+set role authenticated;
+select public.request_staff_role('teacher', '{}'::uuid[]);
+do $$
+declare
+  n int;
+begin
+  if public.my_access_status() <> 'pending' then
+    raise exception 'gmail account should be pending';
+  end if;
+  if (select role from public.profiles where id = auth.uid()) is not null then
+    raise exception 'gmail request assigned a role';
+  end if;
+  select count(*) into n from public.students;
+  if n <> 0 then
+    raise exception 'pending user read students';
+  end if;
+  select count(*) into n from public.list_open_classes();
+  if n = 0 then
+    raise exception 'pending user could not see class names for the request';
+  end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '', false);
+update public.profiles set role = 'teacher' where id = '30000000-0000-0000-0000-000000000099';
 select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000099', false);
 set role authenticated;
 do $$
 declare
   n int;
 begin
-  if public.my_access_status() <> 'denied' then
-    raise exception 'gmail account should be denied';
+  if public.my_access_status() <> 'ok' then
+    raise exception 'approved gmail account was not ok';
   end if;
   select count(*) into n from public.students;
-  if n <> 0 then
-    raise exception 'denied user read students';
+  if n = 0 then
+    raise exception 'approved gmail account could not read students';
   end if;
 end $$;
 reset role;
@@ -494,8 +519,8 @@ declare
   n int;
 begin
   select count(*) into n from public.students;
-  if n <> 0 then
-    raise exception 'teacher outside the domain still read students';
+  if n = 0 then
+    raise exception 'approved teacher was blocked by the old domain lock';
   end if;
 end $$;
 reset role;
@@ -639,10 +664,19 @@ begin
     raise exception 'secretary changed an admin role';
   end if;
 
-  update public.school_settings set school_name = 'שינוי מזכירות' where id = 1;
-  get diagnostics n = row_count;
-  if n <> 0 then
+  begin
+    update public.school_settings set school_name = 'שינוי מזכירות' where id = 1;
     raise exception 'secretary changed school settings';
+  exception
+    when others then
+      if sqlerrm not like '%מזכירות יכולה לעדכן רק את שעות סיום הלימודים%' then
+        raise;
+      end if;
+  end;
+  update public.school_settings set end_fri = '12:30' where id = 1;
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'secretary could not update the Friday end time';
   end if;
 
   begin
@@ -1167,3 +1201,30 @@ exception
     end if;
 end $$;
 reset role;
+
+-- Release time follows the school day, not the clock at the moment of marking.
+do $$
+declare
+  tuesday timestamptz := timestamptz '2026-11-03 10:00:00+02';
+  late timestamptz := timestamptz '2026-11-03 15:00:00+02';
+  saturday timestamptz := timestamptz '2026-11-07 10:00:00+02';
+  shown text;
+begin
+  shown := to_char(timezone('Asia/Jerusalem', public.default_release_at(tuesday, 30)), 'YYYY-MM-DD HH24:MI');
+  if shown <> '2026-11-03 14:30' then
+    raise exception 'tuesday release should be 14:30, got %', shown;
+  end if;
+  shown := to_char(timezone('Asia/Jerusalem', public.default_release_at(late, 30)), 'HH24:MI');
+  if shown <> '15:30' then
+    raise exception 'after the bell, release should be now plus duration, got %', shown;
+  end if;
+  begin
+    perform public.default_release_at(saturday, 30);
+    raise exception 'saturday should have no school';
+  exception
+    when others then
+      if sqlerrm not like '%אין לימודים ביום זה%' then
+        raise;
+      end if;
+  end;
+end $$;

@@ -535,6 +535,7 @@ details.preview pre { white-space: pre-wrap; font: inherit; margin: 8px 0 0; }
   padding: 0 12px;
 }
 .row-menu-pop button.danger { color: var(--danger); }
+.day-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
 .owner-badge {
   display: inline-block;
   margin-inline-start: 8px;

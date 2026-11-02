@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getApi } from "../api";
-import type { Detention, Reason, Student } from "../api/types";
+import type { DayEnds, Detention, Reason, Student } from "../api/types";
+import { DEFAULT_DAY_ENDS } from "../api/types";
 import { useAuth } from "../auth";
 import { Banner, Button, Field, studentName } from "../components/ui";
-import { formatTime, jerusalemClock, jerusalemDateTimeIso, jerusalemToday } from "../lib/dates";
+import { defaultReleaseIso, formatTime, jerusalemClock, jerusalemDateTimeIso, jerusalemDow, jerusalemToday } from "../lib/dates";
 import { rememberStudent } from "./SearchPage";
 
 const DURATIONS = [15, 30, 45, 60];
+const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 export function MarkPage() {
   const { id = "" } = useParams();
@@ -23,7 +25,8 @@ export function MarkPage() {
   const [minutes, setMinutes] = useState(30);
   const [customMinutes, setCustomMinutes] = useState("");
   const [notes, setNotes] = useState("");
-  const [releaseTime, setReleaseTime] = useState(() => jerusalemClock(new Date(Date.now() + 30 * 60000)));
+  const [dayEnds, setDayEnds] = useState<DayEnds>(DEFAULT_DAY_ENDS);
+  const [releaseTime, setReleaseTime] = useState("16:30");
   const [releaseEdited, setReleaseEdited] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,12 +34,14 @@ export function MarkPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [students, classes, reasonRows, detentions] = await Promise.all([
+        const [students, classes, reasonRows, detentions, settings] = await Promise.all([
           getApi().listStudents(),
           getApi().listClasses(),
           getApi().listReasons(),
           getApi().listDetentions({ date: jerusalemToday() }),
+          getApi().getSettings(),
         ]);
+        setDayEnds(settings.dayEnds);
         const found = students.find((item) => item.id === id) ?? null;
         const room = classes.find((item) => item.id === found?.classId);
         setStudent(found);
@@ -53,9 +58,18 @@ export function MarkPage() {
   }, [id]);
 
   const duration = customMinutes ? Number(customMinutes) : minutes;
-  const releaseIso = jerusalemDateTimeIso(releaseTime || jerusalemClock());
+  const schoolEnd = dayEnds[DAY_KEYS[jerusalemDow()]];
+  const suggestedIso = defaultReleaseIso(duration, schoolEnd);
+  const suggestedClock = suggestedIso ? jerusalemClock(new Date(suggestedIso)) : "";
+  const noSchool = suggestedIso === null;
+  const releaseIso = releaseEdited || !suggestedIso ? jerusalemDateTimeIso(releaseTime || jerusalemClock()) : suggestedIso;
+
+  useEffect(() => {
+    if (releaseEdited || !suggestedClock) return;
+    setReleaseTime(suggestedClock);
+  }, [releaseEdited, suggestedClock]);
   const reasonText = reasonId === "other" ? freeText.trim() : (reasons.find((reason) => reason.id === reasonId)?.label ?? "");
-  const ready = Boolean(student) && reasonText.length > 0 && duration >= 1 && duration <= 240;
+  const ready = Boolean(student) && !noSchool && reasonText.length > 0 && duration >= 1 && duration <= 240;
 
   async function submit() {
     if (!student || !ready) return;
@@ -68,7 +82,7 @@ export function MarkPage() {
         reasonText,
         durationMinutes: duration,
         notes: notes.trim() || null,
-        releaseAt: releaseIso,
+        releaseAt: releaseEdited ? releaseIso : null,
       });
       rememberStudent(student.id);
       const verb = student.gender === "female" ? "סומנה" : "סומן";
@@ -156,7 +170,6 @@ export function MarkPage() {
               onClick={() => {
                 setMinutes(value);
                 setCustomMinutes("");
-                if (!releaseEdited) setReleaseTime(jerusalemClock(new Date(Date.now() + value * 60000)));
               }}
             >
               {value}
@@ -172,6 +185,14 @@ export function MarkPage() {
           />
         </Field>
       </section>
+      {noSchool ? <Banner tone="warn">אין לימודים היום, ולכן אי אפשר לסמן השארות.</Banner> : null}
+      {schoolEnd && !noSchool ? (
+        <p className="muted">
+          {new Date(jerusalemDateTimeIso(schoolEnd)).getTime() < Date.now()
+            ? "הלימודים כבר נגמרו, אז ההשארות מתחילה עכשיו."
+            : <>ההשארות מתחילה בסיום הלימודים, <bdi className="ltr">{schoolEnd}</bdi>.</>}
+        </p>
+      ) : null}
       <label className="release-card">
         <span>שעת יציאה</span>
         <strong>

@@ -26,6 +26,26 @@ export function jerusalemClock(date = new Date()): string {
   }).format(date);
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** 0 Sunday … 6 Saturday, in Asia/Jerusalem. */
+export function jerusalemDow(now = new Date()): number {
+  const label = new Intl.DateTimeFormat("en-US", { timeZone: JERUSALEM, weekday: "short" }).format(now);
+  const index = WEEKDAYS.indexOf(label);
+  return index < 0 ? 0 : index;
+}
+
+/**
+ * Detention starts at the school day's end, unless it is marked after that time.
+ * Returns null when that weekday has no school.
+ */
+export function defaultReleaseIso(durationMinutes: number, endTime: string | null, now = new Date()): string | null {
+  if (!endTime) return null;
+  const endMs = new Date(jerusalemDateTimeIso(endTime.slice(0, 5), now)).getTime();
+  const start = now.getTime() > endMs ? now.getTime() : endMs;
+  return new Date(start + durationMinutes * 60000).toISOString();
+}
+
 /** ISO timestamp for a clock time on today's Jerusalem date. */
 export function jerusalemDateTimeIso(time: string, base = new Date()): string {
   const day = jerusalemToday(base);
