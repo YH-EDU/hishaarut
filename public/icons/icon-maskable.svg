@@ -6,17 +6,17 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" fill="url(#bg)"/>
-  <g transform="translate(256 256) scale(0.78) translate(-256 -256)">
-    
+  
   <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="228" cy="214" r="138" stroke-width="40"/>
-    <path d="M228 214 V96" stroke-width="36"/>
-    <path d="M228 214 L318 268" stroke-width="36"/>
+    <circle cx="256.00" cy="256.00" r="170.00" stroke-width="56.00"/>
+    <path d="M256.00 256.00 L256.00 148.32" stroke-width="44.00"/>
+    <path d="M256.00 256.00 L218.38 289.87" stroke-width="44.00"/>
   </g>
-  <circle cx="228" cy="214" r="16" fill="#FFFFFF"/>
-  <circle cx="360" cy="352" r="92" fill="#00C853"/>
-  <path d="M316 354 L346 386 L410 314" fill="none" stroke="#FFFFFF" stroke-width="28"
+  <circle cx="256.00" cy="256.00" r="24.20" fill="#FFFFFF"/>
+
+  <circle cx="325.00" cy="325.00" r="102.00" fill="#00C853"/>
+  <path d="M292.46 326.18 L320.27 352.21 L366.41 297.79"
+        fill="none" stroke="#FFFFFF" stroke-width="28.56"
         stroke-linecap="round" stroke-linejoin="round"/>
 
-  </g>
 </svg>

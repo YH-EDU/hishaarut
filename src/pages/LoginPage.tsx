@@ -24,7 +24,7 @@ export function LoginPage() {
 
   return (
     <div className="login">
-      <img className="app-icon" src={`${import.meta.env.BASE_URL}icons/v2/icon-192.png`} alt="" width={72} height={72} />
+      <img className="app-icon" src={`${import.meta.env.BASE_URL}icons/v3/icon-192.png`} alt="" width={72} height={72} />
       <h1>נשארים</h1>
       <p className="muted">סימון מהיר של תלמידים שנשארים אחרי שעות הלימודים, ומעקב של המזכירות עד היציאה הביתה.</p>
       {error ? <Banner tone="danger">{error}</Banner> : null}

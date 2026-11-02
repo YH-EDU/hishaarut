@@ -21,10 +21,10 @@ export default defineConfig(({ mode }) => {
         "robots.txt",
         "templates/students-template.csv",
         "icons/apple-touch-icon.png",
-        "icons/v2/icon-192.png",
-        "icons/v2/icon-512.png",
-        "icons/v2/icon-maskable-192.png",
-        "icons/v2/icon-maskable-512.png",
+        "icons/v3/icon-192.png",
+        "icons/v3/icon-512.png",
+        "icons/v3/icon-maskable-192.png",
+        "icons/v3/icon-maskable-512.png",
       ],
       manifest: {
         name: "נשארים",
@@ -38,10 +38,10 @@ export default defineConfig(({ mode }) => {
         start_url: ".",
         scope: ".",
         icons: [
-          { src: "icons/v2/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "icons/v2/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "icons/v2/icon-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
-          { src: "icons/v2/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "icons/v3/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icons/v3/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icons/v3/icon-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+          { src: "icons/v3/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {
@@ -49,7 +49,7 @@ export default defineConfig(({ mode }) => {
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2,csv}"],
         // New icon URLs plus a new cache id so an already installed PWA
         // drops the old precache and picks up the launcher art.
-        cacheId: "hishaarut-v2",
+        cacheId: "hishaarut-v3",
         cleanupOutdatedCaches: true,
       },
     }),
