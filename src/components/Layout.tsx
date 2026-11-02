@@ -58,7 +58,7 @@ export function Layout() {
   const tabs = phoneTabs(role);
   const [school, setSchool] = useState("נשארים");
   const [moreOpen, setMoreOpen] = useState(false);
-  const showFab = pathname.startsWith("/dashboard") || pathname.startsWith("/roster") || pathname.startsWith("/mine");
+  const showFab = pathname.startsWith("/roster") || pathname.startsWith("/mine");
 
   useEffect(() => {
     void getApi()

@@ -31,7 +31,7 @@ interface DemoState {
   notifications: NotificationRow[];
 }
 
-const STORAGE_KEY = "hishaarut-demo-v1";
+const STORAGE_KEY = "hishaarut-demo-v2";
 
 function seed(): DemoState {
   const profiles: Profile[] = [
@@ -64,6 +64,16 @@ function seed(): DemoState {
     ["s13", "אדם", "גבאי", "male", "c-t1", "דנה גבאי", "050-7000013"],
     ["s14", "יואב", "משה", "male", "c-t1", "יוסי משה", "050-7000014"],
     ["s15", "ים", "חדד", "male", "c-t1", "רינה חדד", "050-7000015"],
+    ["s16", "יונתן", "לוי", "male", "c-z1", "שרה לוי", "050-7000016"],
+    ["s17", "אליהו", "כהן", "male", "c-z2", "רחל כהן", "050-7000017"],
+    ["s18", "מנחם", "פרידמן", "male", "c-z2", "לאה פרידמן", "050-7000018"],
+    ["s19", "בנימין", "גולד", "male", "c-h1", "מרים גולד", "050-7000019"],
+    ["s20", "שמעון", "ברק", "male", "c-h1", "דינה ברק", "050-7000020"],
+    ["s21", "אהרן", "מזרחי", "male", "c-h2", "חנה מזרחי", "050-7000021"],
+    ["s22", "משה", "אזולאי", "male", "c-h2", "רבקה אזולאי", "050-7000022"],
+    ["s23", "יצחק", "חדד", "male", "c-t1", "אסתר חדד", "050-7000023"],
+    ["s24", "יעקב", "דהן", "male", "c-t1", "מלכה דהן", "050-7000024"],
+    ["s25", "דוד", "קדוש", "male", "c-z1", "ציפורה קדוש", "050-7000025"],
   ];
   const students: Student[] = rows.map(([id, firstName, lastName, gender, classId]) => ({
     id,
@@ -110,9 +120,70 @@ function seed(): DemoState {
       { id: "r4", label: "אי-הכנת שיעורי בית", active: true, sortOrder: 40 },
       { id: "r5", label: "איחור", active: true, sortOrder: 50 },
     ],
-    detentions: [],
-    notifications: [],
+    ...todayBoard(students, classes, contacts),
   };
+}
+
+function todayBoard(
+  students: Student[],
+  classes: ClassRoom[],
+  contacts: Record<string, StudentContact>,
+): { detentions: Detention[]; notifications: NotificationRow[] } {
+  const reasons = ["חיסור בתפילה", "הפרעה בשיעור", "היעדרות משיעור", "איחור", "אי-הכנת שיעורי בית"];
+  const now = Date.now();
+  const detentions: Detention[] = [];
+  const notifications: NotificationRow[] = [];
+  students.forEach((student, index) => {
+    const room = classes.find((item) => item.id === student.classId);
+    const ready = index < 8;
+    const released = index >= 20;
+    const minutes = ready ? -20 - index * 4 : released ? -40 : 12 + (index - 8) * 7;
+    const marker =
+      index === 2 || index === 14
+        ? { id: "demo-teacher", name: "רונית מורה" }
+        : index === 4 || index === 9
+          ? { id: "demo-homeroom", name: "מיכל מחנכת" }
+          : { id: "demo-other", name: ["יוסי מלמד", "אבי מלמד", "חיים מלמד", "דוד מלמד"][index % 4] };
+    const detention: Detention = {
+      id: `d-${student.id}`,
+      studentId: student.id,
+      reasonId: null,
+      reasonText: reasons[index % reasons.length],
+      durationMinutes: 30,
+      status: released ? "completed" : "pending",
+      detentionDate: jerusalemToday(),
+      releaseAt: new Date(now + minutes * 60000).toISOString(),
+      markedBy: marker.id,
+      markedAt: new Date(now - 40 * 60000).toISOString(),
+      signedBy: released ? "demo-secretary" : null,
+      signedAt: released ? new Date(now - 5 * 60000).toISOString() : null,
+      notes: index === 3 ? "התבקש לסיים דף עבודה" : null,
+      studentFirstName: student.firstName,
+      studentLastName: student.lastName,
+      studentGender: student.gender,
+      classId: student.classId,
+      className: room?.name ?? "",
+      markerName: marker.name,
+      signerName: released ? "דנה מזכירה" : null,
+    };
+    detentions.push(detention);
+    const phone = contacts[student.id]?.parentPhone?.replace(/\D/g, "");
+    notifications.push({
+      id: `n-${student.id}`,
+      detentionId: detention.id,
+      event: "marked",
+      recipientType: "parent",
+      channel: "whatsapp_link",
+      recipientLabel: contacts[student.id]?.parentName ?? "הורה",
+      recipientPhone: phone ? `972${phone.slice(1)}` : null,
+      fallbackPhones: [],
+      messageBody: `${student.firstName} ${student.lastName} נשאר היום.`,
+      status: phone ? "pending" : "skipped",
+      sentAt: null,
+      errorText: phone ? null : "no_phone",
+    });
+  });
+  return { detentions, notifications };
 }
 
 function load(): DemoState {
