@@ -12,6 +12,9 @@ export interface Profile {
   fullName: string;
   phone: string | null;
   role: Role | null;
+  requestedRole: Role | null;
+  requestedClassIds: string[];
+  isOwner: boolean;
 }
 
 export interface SessionState {
@@ -161,7 +164,7 @@ export interface AppApi {
   onSession(listener: (session: SessionState | null) => void): () => void;
   refreshSession(): Promise<SessionState | null>;
   signInWithGoogle(): Promise<void>;
-  signInAs?(role: Role | "pending"): Promise<void>;
+  signInAs?(role: Role | "pending" | "new"): Promise<void>;
   signOut(): Promise<void>;
   getAccessToken(): Promise<string | null>;
   updateOwnProfile(patch: { fullName: string; phone: string }): Promise<void>;
@@ -185,6 +188,12 @@ export interface AppApi {
   saveReason(input: ReasonInput): Promise<void>;
   listProfiles(): Promise<Profile[]>;
   setUserRole(userId: string, role: Role | null): Promise<void>;
+  listOpenClasses(): Promise<Array<{ id: string; name: string }>>;
+  requestStaffRole(role: "teacher" | "homeroom", classIds: string[]): Promise<void>;
+  approveStaffRequest(userId: string, role: Role, classIds: string[]): Promise<void>;
+  rejectStaffRequest(userId: string): Promise<void>;
+  transferOwnership(userId: string): Promise<void>;
+  listReport(from: string, to: string): Promise<Detention[]>;
   listDetentions(query: DetentionQuery): Promise<Detention[]>;
   createDetention(input: DetentionInput): Promise<string>;
   completeDetention(id: string, early?: boolean): Promise<void>;

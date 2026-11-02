@@ -26,6 +26,9 @@ interface ProfileRow {
   full_name: string;
   phone: string | null;
   role: Role | null;
+  requested_role?: Role | null;
+  requested_class_ids?: string[] | null;
+  is_owner?: boolean | null;
 }
 
 interface SettingsRow {
@@ -140,6 +143,9 @@ function mapProfile(row: ProfileRow): Profile {
     fullName: row.full_name,
     phone: row.phone,
     role: row.role,
+    requestedRole: row.requested_role ?? null,
+    requestedClassIds: row.requested_class_ids ?? [],
+    isOwner: row.is_owner ?? false,
   };
 }
 
@@ -231,14 +237,14 @@ async function loadProfile(userId: string, email: string): Promise<Profile> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const { data, error } = await db
       .from("profiles")
-      .select("id, email, full_name, phone, role")
+      .select("id, email, full_name, phone, role, requested_role, requested_class_ids, is_owner")
       .eq("id", userId)
       .maybeSingle();
     if (error) throw asError(error);
     if (data) return mapProfile(data as ProfileRow);
     await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
   }
-  return { id: userId, email, fullName: "", phone: null, role: null };
+  return { id: userId, email, fullName: "", phone: null, role: null, requestedRole: null, requestedClassIds: [], isOwner: false };
 }
 
 async function sessionFromUser(user: { id: string; email?: string | null }): Promise<SessionState> {
@@ -541,7 +547,7 @@ export const supabaseApi: AppApi = {
   async listProfiles() {
     const { data, error } = await client()
       .from("profiles")
-      .select("id, email, full_name, phone, role")
+      .select("id, email, full_name, phone, role, requested_role, requested_class_ids, is_owner")
       .order("full_name");
     if (error) throw asError(error);
     return ((data ?? []) as ProfileRow[]).map(mapProfile);
@@ -550,6 +556,64 @@ export const supabaseApi: AppApi = {
   async setUserRole(userId, role) {
     const { data, error } = await client().from("profiles").update({ role }).eq("id", userId).select("id");
     requireRows(data as { id: string }[] | null, error);
+  },
+
+  async listOpenClasses() {
+    const { data, error } = await client().rpc("list_open_classes");
+    if (error) throw asError(error);
+    return ((data ?? []) as Array<{ id: string; name: string }>).map((row) => ({ id: row.id, name: row.name }));
+  },
+
+  async requestStaffRole(role, classIds) {
+    const { error } = await client().rpc("request_staff_role", { p_role: role, p_class_ids: classIds });
+    if (error) throw asError(error);
+  },
+
+  async approveStaffRequest(userId, role, classIds) {
+    const { error } = await client().rpc("approve_staff_request", {
+      p_id: userId,
+      p_role: role,
+      p_class_ids: classIds,
+    });
+    if (error) throw asError(error);
+  },
+
+  async rejectStaffRequest(userId) {
+    const { error } = await client().rpc("reject_staff_request", { p_id: userId });
+    if (error) throw asError(error);
+  },
+
+  async transferOwnership(userId) {
+    const { error } = await client().rpc("transfer_ownership", { p_new_owner: userId });
+    if (error) throw asError(error);
+  },
+
+  async listReport(from, to) {
+    const { data, error } = await client().rpc("list_report_detentions", { p_from: from, p_to: to });
+    if (error) throw asError(error);
+    return ((data ?? []) as Array<Record<string, string | number | null>>).map((row) => ({
+      id: String(row.id),
+      studentId: String(row.student_id),
+      reasonId: null,
+      reasonText: String(row.reason_text ?? ""),
+      durationMinutes: Number(row.duration_minutes ?? 0),
+      status: row.status as Detention["status"],
+      detentionDate: String(row.detention_date),
+      releaseAt: String(row.release_at ?? new Date().toISOString()),
+      markedBy: "",
+      markedAt: String(row.marked_at ?? ""),
+      signedBy: null,
+      signedAt: row.signed_at ? String(row.signed_at) : null,
+      notes: row.notes ? String(row.notes) : null,
+      studentFirstName: String(row.student_first_name ?? ""),
+      studentLastName: String(row.student_last_name ?? ""),
+      studentGender: null,
+      classId: String(row.class_id ?? ""),
+      className: String(row.class_name ?? ""),
+      markerName: String(row.marker_name ?? ""),
+      signerName: row.signer_name ? String(row.signer_name) : null,
+      releaserName: row.releaser_name ? String(row.releaser_name) : null,
+    }));
   },
 
   async listDetentions(query: DetentionQuery) {

@@ -39,6 +39,9 @@ export function RosterPage() {
     Record<
       string,
       {
+        firstName: string;
+        lastName: string;
+        classId: string;
         parentName: string;
         parentPhone: string;
         parentPhone2: string;
@@ -58,9 +61,7 @@ export function RosterPage() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [confirmText, setConfirmText] = useState("");
 
-  const visibleClasses = classes.filter(
-    (room) => managesAll || role === "teacher" || room.homeroomTeacherId === session?.userId,
-  );
+  const visibleClasses = classes.filter((room) => managesAll || room.homeroomTeacherId === session?.userId);
   const shownClasses = visibleClasses.filter((room) => room.active);
   const classNames = useMemo(() => new Map(classes.map((room) => [room.id, room.name])), [classes]);
   const contactMap = useMemo(() => new Map(contacts.map((contact) => [contact.studentId, contact])), [contacts]);
@@ -111,6 +112,9 @@ export function RosterPage() {
     const contact = contactMap.get(student.id);
     return (
       drafts[student.id] ?? {
+        firstName: student.firstName,
+        lastName: student.lastName,
+        classId: student.classId,
         parentName: contact?.parentName ?? "",
         parentPhone: contact?.parentPhone ?? "",
         parentPhone2: contact?.parentPhone2 ?? "",
@@ -127,10 +131,10 @@ export function RosterPage() {
     try {
       await getApi().saveStudent({
         id: student.id,
-        firstName: student.firstName,
-        lastName: student.lastName,
+        firstName: draft.firstName,
+        lastName: draft.lastName,
         gender: student.gender,
-        classId: student.classId,
+        classId: managesAll ? draft.classId : student.classId,
         parentName: draft.parentName,
         parentPhone: draft.parentPhone,
         parentPhone2: draft.parentPhone2,
@@ -272,7 +276,7 @@ export function RosterPage() {
     <div className="stack">
       <PageHeader
         title="תלמידים וכיתות"
-        lede="לפי כיתות. עריכה ומחיקה על כל תלמיד."
+        lede={managesAll ? "לפי כיתות. עריכה ומחיקה נמצאות בתפריט של כל תלמיד." : "הכיתה שלכם. אפשר לערוך שם וטלפונים של ההורים."}
       />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
@@ -356,7 +360,7 @@ export function RosterPage() {
         ) : null}
       </section>
 
-      <div className="desktop-only">
+      {managesAll ? <div className="desktop-only">
       <ImportWizard
         classes={visibleClasses}
         students={students.filter((student) => visibleClasses.some((room) => room.id === student.classId))}
@@ -367,7 +371,7 @@ export function RosterPage() {
           await load();
         }}
       />
-      </div>
+      </div> : null}
 
       <section className="stack">
         <h2 className="desktop-only">תלמידים</h2>
@@ -402,14 +406,7 @@ export function RosterPage() {
                       </b>
                     </button>
                     {canEdit(student) ? (
-                      <span className="icon-row">
-                        <button type="button" className="icon-btn" aria-label="עריכה" onClick={() => setOpenId(student.id)}>
-                          עריכה
-                        </button>
-                        <button type="button" className="icon-btn danger" aria-label="מחיקה" onClick={() => void askDeleteStudent(student)}>
-                          מחיקה
-                        </button>
-                      </span>
+                      <RowMenu onEdit={() => setOpenId(student.id)} onDelete={() => void askDeleteStudent(student)} />
                     ) : null}
                   </div>
                 </div>
@@ -509,14 +506,7 @@ export function RosterPage() {
                       ) : null}
                       <td>
                         {canEdit(student) ? (
-                          <span className="icon-row">
-                            <button type="button" className="icon-btn" aria-label="עריכה" onClick={() => setOpenId(student.id)}>
-                              עריכה
-                            </button>
-                            <button type="button" className="icon-btn danger" aria-label="מחיקה" onClick={() => void askDeleteStudent(student)}>
-                              מחיקה
-                            </button>
-                          </span>
+                          <RowMenu onEdit={() => setOpenId(student.id)} onDelete={() => void askDeleteStudent(student)} />
                         ) : null}
                       </td>
                     </tr>
@@ -548,8 +538,27 @@ export function RosterPage() {
                     {student.active ? "" : " · בארכיון"}
                   </span>
                 </p>
-                {managesAll || session?.profile.role === "homeroom" ? (
+                {canEdit(student) ? (
                   <>
+                    <Field label="שם פרטי">
+                      <input value={draft.firstName} onChange={(event) => setDraft({ firstName: event.target.value })} />
+                    </Field>
+                    <Field label="שם משפחה">
+                      <input value={draft.lastName} onChange={(event) => setDraft({ lastName: event.target.value })} />
+                    </Field>
+                    {managesAll ? (
+                      <Field label="כיתה">
+                        <select value={draft.classId} onChange={(event) => setDraft({ classId: event.target.value })}>
+                          {classes.map((room) => (
+                            <option key={room.id} value={room.id}>
+                              {room.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    ) : (
+                      <p className="muted">כיתה {classNames.get(student.classId)}</p>
+                    )}
                     <Field label="שם האב">
                       <input value={draft.parentName} onChange={(event) => setDraft({ parentName: event.target.value })} />
                     </Field>
@@ -591,15 +600,8 @@ export function RosterPage() {
                     <Button onClick={() => void saveRow(student)}>שמירה</Button>
                   </>
                 ) : (
-                  <p className="muted">
-                    {student.active ? "אפשר לסמן את התלמיד להשארות ממסך הסימון." : "התלמיד בארכיון."}
-                  </p>
+                  <p className="muted">אפשר לסמן את התלמיד להשארות ממסך הסימון.</p>
                 )}
-                {canEdit(student) ? (
-                  <Button variant="danger" onClick={() => void askDeleteStudent(student)}>
-                    מחיקה
-                  </Button>
-                ) : null}
               </div>
             );
           })}
@@ -899,5 +901,39 @@ function AddStudent({ classes, onSaved }: { classes: ClassRoom[]; onSaved: () =>
         הוספת תלמיד
       </Button>
       </section>
+  );
+}
+
+function RowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="row-menu">
+      <button type="button" className="row-menu-btn" aria-label="פעולות" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        ⋯
+      </button>
+      {open ? (
+        <span className="row-menu-pop" role="menu">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+          >
+            עריכה
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+          >
+            מחיקה
+          </button>
+        </span>
+      ) : null}
+    </span>
   );
 }

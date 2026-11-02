@@ -396,7 +396,7 @@ begin
     raise exception 'teacher changed own role';
   exception
     when others then
-      if sqlerrm not like '%רק מנהל יכול לשנות תפקיד%' then
+      if sqlerrm not like '%אין הרשאה לשנות תפקיד%' then
         raise;
       end if;
   end;
@@ -981,3 +981,189 @@ begin
     raise exception 'released_by was not the admin';
   end if;
 end $$;
+
+-- A new person can request a role, but cannot assign it. Secretary approves.
+select set_config('request.jwt.claim.sub', '', false);
+insert into auth.users (id, email, raw_user_meta_data)
+values ('30000000-0000-0000-0000-000000000007', 'new@example.test', '{"full_name":"תלמיד חדש"}');
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000007', false);
+set role authenticated;
+select public.request_staff_role(
+  'homeroom',
+  array['10000000-0000-0000-0000-000000000003']::uuid[]
+);
+do $$
+begin
+  if (select role from public.profiles where id = '30000000-0000-0000-0000-000000000007') is not null then
+    raise exception 'request assigned a real role';
+  end if;
+  if (select requested_role from public.profiles where id = '30000000-0000-0000-0000-000000000007') <> 'homeroom' then
+    raise exception 'request was not stored';
+  end if;
+  begin
+    update public.profiles set role = 'teacher' where id = auth.uid();
+    raise exception 'pending user set a role';
+  exception
+    when others then
+      if sqlerrm not like '%אין הרשאה לשנות תפקיד%' then
+        raise;
+      end if;
+  end;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+begin
+  perform public.approve_staff_request(
+    '30000000-0000-0000-0000-000000000007',
+    'teacher',
+    '{}'::uuid[]
+  );
+  raise exception 'teacher approved a request';
+exception
+  when others then
+    if sqlerrm not like '%רק מנהל או מזכירות יכולים לאשר תפקיד%' then
+      raise;
+    end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000004', false);
+set role authenticated;
+select public.approve_staff_request(
+  '30000000-0000-0000-0000-000000000007',
+  'teacher',
+  '{}'::uuid[]
+);
+do $$
+begin
+  perform public.approve_staff_request(
+    '30000000-0000-0000-0000-000000000002',
+    'admin',
+    '{}'::uuid[]
+  );
+  raise exception 'secretary granted admin through approval';
+exception
+  when others then
+    if sqlerrm not like '%מזכירות לא יכולה למנות או לשנות מנהל%' then
+      raise;
+    end if;
+end $$;
+reset role;
+
+do $$
+begin
+  if (select role from public.profiles where id = '30000000-0000-0000-0000-000000000007') <> 'teacher' then
+    raise exception 'secretary approval did not stick';
+  end if;
+  if (select requested_role from public.profiles where id = '30000000-0000-0000-0000-000000000007') is not null then
+    raise exception 'request was not cleared';
+  end if;
+end $$;
+
+-- Owner: nobody else can change that profile, and only the owner transfers it.
+select set_config('request.jwt.claim.sub', '', false);
+update public.profiles set is_owner = true where id = '30000000-0000-0000-0000-000000000001';
+update public.profiles set role = 'admin' where id = '30000000-0000-0000-0000-000000000006';
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000006', false);
+set role authenticated;
+do $$
+begin
+  update public.profiles
+  set role = 'teacher'
+  where id = '30000000-0000-0000-0000-000000000001';
+  raise exception 'other admin demoted the owner';
+exception
+  when others then
+    if sqlerrm not like '%רק בעל המערכת יכול לשנות את הפרופיל שלו%' then
+      raise;
+    end if;
+end $$;
+do $$
+begin
+  perform public.transfer_ownership('30000000-0000-0000-0000-000000000006');
+  raise exception 'non-owner transferred ownership';
+exception
+  when others then
+    if sqlerrm not like '%רק בעל המערכת יכול להעביר בעלות%' then
+      raise;
+    end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000004', false);
+set role authenticated;
+do $$
+begin
+  update public.profiles
+  set full_name = 'שינוי'
+  where id = '30000000-0000-0000-0000-000000000001';
+  if found then
+    raise exception 'secretary edited the owner';
+  end if;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select public.transfer_ownership('30000000-0000-0000-0000-000000000006');
+reset role;
+
+do $$
+begin
+  if (select is_owner from public.profiles where id = '30000000-0000-0000-0000-000000000001') then
+    raise exception 'previous owner kept the flag';
+  end if;
+  if not (select is_owner from public.profiles where id = '30000000-0000-0000-0000-000000000006') then
+    raise exception 'ownership did not move';
+  end if;
+  if (select owner_id from public.school_settings where id = 1) <> '30000000-0000-0000-0000-000000000006' then
+    raise exception 'settings owner was not updated';
+  end if;
+  if (select role from public.profiles where id = '30000000-0000-0000-0000-000000000001') <> 'admin' then
+    raise exception 'transfer demoted the previous owner';
+  end if;
+end $$;
+
+-- Homeroom reports stay inside their own class.
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000003', false);
+set role authenticated;
+do $$
+declare
+  n int;
+  foreign_n int;
+begin
+  select count(*) into n from public.list_report_detentions('2000-01-01', '2100-01-01');
+  select count(*) into foreign_n
+  from public.list_report_detentions('2000-01-01', '2100-01-01') r
+  where r.class_id is distinct from '10000000-0000-0000-0000-000000000001';
+  if foreign_n <> 0 then
+    raise exception 'homeroom report included another class';
+  end if;
+end $$;
+do $$
+begin
+  perform public.list_report_detentions('2000-01-01', '2100-01-01');
+exception
+  when others then
+    null;
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+begin
+  perform public.list_report_detentions('2000-01-01', '2100-01-01');
+  raise exception 'teacher opened a report';
+exception
+  when others then
+    if sqlerrm not like '%אין הרשאה לדוח%' then
+      raise;
+    end if;
+end $$;
+reset role;

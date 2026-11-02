@@ -500,6 +500,51 @@ details.preview pre { white-space: pre-wrap; font: inherit; margin: 8px 0 0; }
   font-weight: 700;
   border-bottom: 0;
 }
+.row-menu { position: relative; display: inline-flex; }
+.row-menu-btn {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+.people-table tr .row-menu-btn { opacity: 0.35; }
+.people-table tr:hover .row-menu-btn,
+.row-menu-btn[aria-expanded="true"] { opacity: 1; background: var(--bg); }
+.row-menu-pop {
+  position: absolute;
+  z-index: 6;
+  inset-inline-end: 0;
+  top: 38px;
+  min-width: 140px;
+  display: grid;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.row-menu-pop button {
+  min-height: 44px;
+  border: 0;
+  background: white;
+  text-align: start;
+  padding: 0 12px;
+}
+.row-menu-pop button.danger { color: var(--danger); }
+.owner-badge {
+  display: inline-block;
+  margin-inline-start: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fff1dc;
+  color: #8a4b08;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
 .icon-row { display: flex; gap: 6px; }
 .icon-btn {
   min-height: 44px;
@@ -534,6 +579,7 @@ summary { min-height: 44px; display: flex; align-items: center; cursor: pointer;
   min-height: 52px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 14px;
   border-radius: 14px;
   background: white;
