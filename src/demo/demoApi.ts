@@ -1,4 +1,3 @@
-import { blockedDeleteMessage } from "../lib/archive";
 import { jerusalemToday } from "../lib/dates";
 import { renderDetentionMessage } from "../lib/messages";
 import { normalizeIlPhone, whatsappCandidates } from "../lib/phone";
@@ -50,20 +49,20 @@ function seed(): DemoState {
     { id: "c-t1", name: "ט׳1", grade: "ט", homeroomTeacherId: null, active: true },
   ];
   const rows: Array<[string, string, string, "male" | "female", string, string, string]> = [
-    ["s1", "נועה", "ברק", "female", "c-z1", "מיכל ברק", "050-7000001"],
+    ["s1", "נתן", "ברק", "male", "c-z1", "מיכל ברק", "050-7000001"],
     ["s2", "איתי", "חדד", "male", "c-z1", "יואב חדד", "050-7000002"],
-    ["s3", "מאיה", "אברהם", "female", "c-z1", "רחל אברהם", "050-7000003"],
+    ["s3", "מאיר", "אברהם", "male", "c-z1", "רחל אברהם", "050-7000003"],
     ["s4", "עומר", "פרץ", "male", "c-z1", "דוד פרץ", "050-7000004"],
     ["s5", "יובל", "מזרחי", "male", "c-z2", "אורלי מזרחי", "050-7000005"],
-    ["s6", "תמר", "אוחיון", "female", "c-z2", "חיים אוחיון", "050-7000006"],
+    ["s6", "תומר", "אוחיון", "male", "c-z2", "חיים אוחיון", "050-7000006"],
     ["s7", "אריאל", "ביטון", "male", "c-z2", "שרה ביטון", "050-7000007"],
-    ["s8", "הילה", "דהן", "female", "c-h1", "משה דהן", "050-7000008"],
+    ["s8", "הלל", "דהן", "male", "c-h1", "משה דהן", "050-7000008"],
     ["s9", "דניאל", "קדוש", "male", "c-h1", "יעל קדוש", "050-7000009"],
-    ["s10", "שירה", "לוי", "female", "c-h1", "אבי לוי", "050-7000010"],
+    ["s10", "שחר", "לוי", "male", "c-h1", "אבי לוי", "050-7000010"],
     ["s11", "רועי", "אזולאי", "male", "c-h2", "ענת אזולאי", "050-7000011"],
-    ["s12", "ליאן", "כהן", "female", "c-h2", "גיא כהן", "050-7000012"],
-    ["s13", "אדם", "גבאי", "male", "c-t1", "נועה גבאי", "050-7000013"],
-    ["s14", "יעל", "משה", "female", "c-t1", "יוסי משה", "050-7000014"],
+    ["s12", "ליאור", "כהן", "male", "c-h2", "גיא כהן", "050-7000012"],
+    ["s13", "אדם", "גבאי", "male", "c-t1", "דנה גבאי", "050-7000013"],
+    ["s14", "יואב", "משה", "male", "c-t1", "יוסי משה", "050-7000014"],
     ["s15", "ים", "חדד", "male", "c-t1", "רינה חדד", "050-7000015"],
   ];
   const students: Student[] = rows.map(([id, firstName, lastName, gender, classId]) => ({
@@ -397,14 +396,18 @@ export const demoApi: AppApi = {
     emitChange();
   },
 
-  async deleteClass(id) {
+  async deleteClass(id, confirmName) {
     requireManager();
     const room = state.classes.find((item) => item.id === id);
     if (!room) throw new Error("הכיתה לא נמצאה");
     const kids = state.students.filter((student) => student.classId === id);
-    const blocked = kids.some((student) => state.detentions.some((detention) => detention.studentId === student.id));
-    if (blocked) throw new Error(blockedDeleteMessage(`כיתה ${room.name}`));
+    const history = kids.some((student) => state.detentions.some((detention) => detention.studentId === student.id));
+    if (history && (confirmName ?? "").trim() !== room.name) {
+      throw new Error("כדי למחוק כיתה עם היסטוריה יש להקליד את שם הכיתה");
+    }
     const gone = new Set(kids.map((student) => student.id));
+    state.detentions = state.detentions.filter((detention) => !gone.has(detention.studentId));
+    state.notifications = state.notifications.filter((note) => state.detentions.some((detention) => detention.id === note.detentionId));
     state.students = state.students.filter((student) => !gone.has(student.id));
     gone.forEach((studentId) => delete state.contacts[studentId]);
     state.classes = state.classes.filter((item) => item.id !== id);
@@ -503,13 +506,18 @@ export const demoApi: AppApi = {
     emitChange();
   },
 
-  async deleteStudent(id) {
-    requireManager();
+  async deleteStudent(id, confirmName) {
+    const profile = requireUser();
     const student = state.students.find((item) => item.id === id);
     if (!student) throw new Error("התלמיד לא נמצא");
-    if (state.detentions.some((detention) => detention.studentId === id)) {
-      throw new Error(blockedDeleteMessage(`${student.firstName} ${student.lastName}`));
+    if (!managesClass(profile, student.classId)) throw new Error("אין הרשאה למחוק את התלמיד");
+    const history = state.detentions.some((detention) => detention.studentId === id);
+    const expected = `${student.firstName} ${student.lastName}`;
+    if (history && (confirmName ?? "").trim() !== expected) {
+      throw new Error("כדי למחוק תלמיד עם היסטוריה יש להקליד את שמו המלא");
     }
+    state.detentions = state.detentions.filter((detention) => detention.studentId !== id);
+    state.notifications = state.notifications.filter((note) => state.detentions.some((detention) => detention.id === note.detentionId));
     state.students = state.students.filter((item) => item.id !== id);
     delete state.contacts[id];
     emitChange();
@@ -617,6 +625,7 @@ export const demoApi: AppApi = {
       durationMinutes: input.durationMinutes,
       status: "pending",
       detentionDate: jerusalemToday(),
+      releaseAt: input.releaseAt ?? new Date(Date.now() + input.durationMinutes * 60000).toISOString(),
       markedBy: profile.id,
       markedAt: new Date().toISOString(),
       signedBy: null,
@@ -636,11 +645,14 @@ export const demoApi: AppApi = {
     return detention.id;
   },
 
-  async completeDetention(id) {
+  async completeDetention(id, early = false) {
     const profile = requireUser();
     if (!canSign(profile)) throw new Error("אין הרשאה לאשר סיום");
     const detention = state.detentions.find((item) => item.id === id);
     if (!detention || detention.status !== "pending") throw new Error("מעבר סטטוס אינו חוקי");
+    if (new Date(detention.releaseAt).getTime() > Date.now() && !(early && profile.role === "admin")) {
+      throw new Error("עדיין לא הגיעה שעת היציאה");
+    }
     detention.status = "completed";
     detention.signedBy = profile.id;
     detention.signedAt = new Date().toISOString();

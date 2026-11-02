@@ -78,6 +78,7 @@ export interface Detention {
   durationMinutes: number;
   status: DetentionStatus;
   detentionDate: string;
+  releaseAt: string;
   markedBy: string;
   markedAt: string;
   signedBy: string | null;
@@ -113,6 +114,7 @@ export interface DetentionInput {
   reasonText: string;
   durationMinutes: number;
   notes: string | null;
+  releaseAt?: string | null;
 }
 
 export interface StudentInput {
@@ -170,21 +172,21 @@ export interface AppApi {
   listClasses(): Promise<ClassRoom[]>;
   saveClass(input: ClassInput): Promise<void>;
   setClassActive(id: string, active: boolean, includeStudents: boolean): Promise<void>;
-  deleteClass(id: string): Promise<void>;
+  deleteClass(id: string, confirmName?: string): Promise<void>;
   listStudents(): Promise<Student[]>;
   listContacts(): Promise<StudentContact[]>;
   saveStudent(input: StudentInput): Promise<void>;
   setWhatsappOptOut(studentId: string, slot: WhatsappSlot, noWhatsapp: boolean): Promise<void>;
   countDetentions(studentIds: string[]): Promise<number>;
   setStudentsActive(ids: string[], active: boolean): Promise<void>;
-  deleteStudent(id: string): Promise<void>;
+  deleteStudent(id: string, confirmName?: string): Promise<void>;
   listReasons(): Promise<Reason[]>;
   saveReason(input: ReasonInput): Promise<void>;
   listProfiles(): Promise<Profile[]>;
   setUserRole(userId: string, role: Role | null): Promise<void>;
   listDetentions(query: DetentionQuery): Promise<Detention[]>;
   createDetention(input: DetentionInput): Promise<string>;
-  completeDetention(id: string): Promise<void>;
+  completeDetention(id: string, early?: boolean): Promise<void>;
   cancelDetention(id: string): Promise<void>;
   listNotifications(detentionIds: string[]): Promise<NotificationRow[]>;
   listDispatch(date: string): Promise<NotificationRow[]>;

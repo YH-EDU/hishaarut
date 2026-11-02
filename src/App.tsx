@@ -108,7 +108,7 @@ function SignedIn({ sessionRole }: { sessionRole: Role | null }) {
         <Route
           path="roster"
           element={
-            <Allow roles={["teacher", "homeroom", "secretary", "admin"]}>
+            <Allow roles={["homeroom", "secretary", "admin"]}>
               <RosterPage />
             </Allow>
           }
@@ -116,7 +116,7 @@ function SignedIn({ sessionRole }: { sessionRole: Role | null }) {
         <Route
           path="staff"
           element={
-            <Allow roles={["teacher", "homeroom", "secretary", "admin"]}>
+            <Allow roles={["secretary", "admin"]}>
               <StaffPage />
             </Allow>
           }

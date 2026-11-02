@@ -20,27 +20,29 @@ function desktopNav(role: Role): Array<{ to: string; label: string }> {
   const staff = { to: "/staff", label: "צוות" };
   const reports = { to: "/reports", label: "דוחות" };
   const settings = { to: "/settings", label: "הגדרות" };
-  if (role === "admin") return [today, mark, students, staff, reports, settings];
-  if (role === "secretary") return [today, mark, students, staff, reports];
-  if (role === "homeroom") return [mark, mine, ownClass, reports];
-  return [mark, mine, reports];
+  if (role === "admin") return [today, students, staff, mark, reports, settings];
+  if (role === "secretary") return [today, students, mark, staff, reports];
+  if (role === "homeroom") return [mark, ownClass, mine];
+  return [mark, mine];
 }
 
 function phoneTabs(role: Role): NavItem[] {
   const today = { to: role === "teacher" || role === "homeroom" ? "/mine" : "/dashboard", label: "היום", icon: "today" as const };
   const mark = { to: "/search", label: "סימון", icon: "mark" as const };
-  const students = { to: role === "homeroom" ? "/class" : "/roster", label: "תלמידים", icon: "students" as const };
+  const ownClass = { to: "/class", label: "הכיתה שלי", icon: "students" as const };
+  const students = { to: "/roster", label: "תלמידים", icon: "students" as const };
   const account = { to: "/account", label: "החשבון", icon: "account" as const };
   const more = { to: "#more", label: "עוד", icon: "more" as const };
-  if (role === "admin" || role === "secretary") return [today, mark, students, more];
-  if (role === "homeroom") return [mark, today, students, account];
+  if (role === "admin" || role === "secretary") return [today, students, mark, more];
+  if (role === "homeroom") return [mark, ownClass, today, account];
   return [mark, today, account];
 }
 
 function titleFor(pathname: string): string {
   if (pathname.startsWith("/dashboard") || pathname.startsWith("/mine")) return "היום";
   if (pathname.startsWith("/search") || pathname.startsWith("/students/")) return "סימון";
-  if (pathname.startsWith("/roster") || pathname.startsWith("/class")) return "תלמידים";
+  if (pathname.startsWith("/class")) return "הכיתה שלי";
+  if (pathname.startsWith("/roster")) return "תלמידים";
   if (pathname.startsWith("/staff")) return "צוות";
   if (pathname.startsWith("/reports")) return "דוחות";
   if (pathname.startsWith("/settings")) return "הגדרות";

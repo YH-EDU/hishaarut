@@ -40,6 +40,14 @@ export function classKey(name: string): string {
 }
 
 /** Display form used in the database, for example ז׳1. */
+export function classRank(name: string): string {
+  const key = classKey(name);
+  const match = key.match(/^(יב|יא|[א-ת])(\d*)$/);
+  if (!match) return `ת${key}`;
+  const grade = match[1] === "יא" ? "כ" : match[1] === "יב" ? "ככ" : match[1];
+  return `${grade}${(match[2] ?? "").padStart(2, "0")}`;
+}
+
 export function displayClassName(name: string): string {
   const key = classKey(name);
   const match = key.match(/^(יב|יא|[א-ת])(\d{0,2})$/);

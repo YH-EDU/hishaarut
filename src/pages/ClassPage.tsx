@@ -5,8 +5,7 @@ import type { ClassRoom, Gender, Student, StudentContact } from "../api/types";
 import { useAuth } from "../auth";
 import { ImportWizard } from "../components/ImportWizard";
 import { PageHeader } from "../components/PageHeader";
-import { WhatsAppButton } from "../components/WhatsAppButton";
-import { Banner, Button, Empty, Field, studentName } from "../components/ui";
+import { Banner, Button, Empty, Field, Ltr, studentName } from "../components/ui";
 import { normalizeIlPhone } from "../lib/phone";
 
 export function ClassPage() {
@@ -19,7 +18,6 @@ export function ClassPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
 
   const managesAll = role === "admin" || role === "secretary";
   const mine = classes.filter((room) => managesAll || room.homeroomTeacherId === session?.userId);
@@ -41,8 +39,8 @@ export function ClassPage() {
   }, []);
 
   const roster = useMemo(
-    () => students.filter((student) => student.classId === selected?.id && (showArchived || student.active)),
-    [students, selected?.id, showArchived],
+    () => students.filter((student) => student.classId === selected?.id && student.active),
+    [students, selected?.id],
   );
   const contactMap = useMemo(() => new Map(contacts.map((contact) => [contact.studentId, contact])), [contacts]);
 
@@ -66,30 +64,31 @@ export function ClassPage() {
 
   return (
     <div className="stack">
-      <PageHeader title={`כיתה ${selected.name}`} lede="רשימת התלמידים של הכיתה. אפשר לייבא קובץ או לעדכן טלפון של הורה." />
+      <PageHeader title={`כיתה ${selected.name}`} lede="התלמידים של הכיתה. עריכת שם וטלפונים נשארת אצלכם." />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
-      <StudentForm
-        classId={selected.id}
-        onSaved={async () => {
-          setEditing(null);
-          await load();
-        }}
-      />
-      <ImportWizard
-        classes={mine}
-        students={students.filter((student) => mine.some((room) => room.id === student.classId))}
-        contacts={contacts}
-        canCreateClasses={managesAll}
-        onImported={async (message) => {
-          setInfo(message);
-          await load();
-        }}
-      />
-      <label className="check-row">
-        <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
-        הצגת ארכיון
-      </label>
+      <details className="panel">
+        <summary>הוספת תלמיד או ייבוא</summary>
+        <div className="stack">
+          <StudentForm
+            classId={selected.id}
+            onSaved={async () => {
+              setEditing(null);
+              await load();
+            }}
+          />
+          <ImportWizard
+            classes={mine}
+            students={students.filter((student) => mine.some((room) => room.id === student.classId))}
+            contacts={contacts}
+            canCreateClasses={managesAll}
+            onImported={async (message) => {
+              setInfo(message);
+              await load();
+            }}
+          />
+        </div>
+      </details>
       <div className="list">
         {roster.map((student) => {
           const contact = contactMap.get(student.id);
@@ -98,13 +97,8 @@ export function ClassPage() {
               <div className="spread">
                 <div>
                   <strong>{studentName(student.firstName, student.lastName)}</strong>
-                  <div className="phone-line">
-                    {student.active ? null : <span className="badge">בארכיון</span>}
-                    {[contact?.parentPhone, contact?.parentPhone2, contact?.parent2Phone, contact?.parent2Phone2]
-                      .filter((phone): phone is string => Boolean(phone))
-                      .map((phone) => (
-                        <WhatsAppButton key={phone} phone={phone} message="שלום" />
-                      ))}
+                  <div className="muted">
+                    {contact?.parentPhone ? <Ltr>{contact.parentPhone}</Ltr> : "אין טלפון"}
                   </div>
                 </div>
                 <Button variant="ghost" onClick={() => setEditing(editing === student.id ? null : student.id)}>

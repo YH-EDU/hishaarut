@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApi } from "../api";
 import type { Detention, NotificationRow, SchoolSettings } from "../api/types";
+import { useAuth } from "../auth";
 import { GettingStarted } from "../components/GettingStarted";
 import { PageHeader } from "../components/PageHeader";
 import { Banner, Button, Empty, Ltr, StatusPill, studentName } from "../components/ui";
-import { formatTime, jerusalemToday } from "../lib/dates";
+import { countdownLabel, formatTime, jerusalemToday } from "../lib/dates";
 import { dispatchNotification } from "../lib/notifications";
 import { maskPhone } from "../lib/phone";
 
@@ -30,6 +31,13 @@ export function DashboardPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [fallback, setFallback] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const isAdmin = useAuth().session?.profile.role === "admin";
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const load = useCallback(async () => {
     const today = jerusalemToday();
@@ -53,11 +61,11 @@ export function DashboardPage() {
     );
   }, [load]);
 
-  async function complete(id: string) {
+  async function complete(id: string, early = false) {
     setError(null);
     setBusyId(id);
     try {
-      await getApi().completeDetention(id);
+      await getApi().completeDetention(id, early);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "האישור נכשל");
@@ -126,14 +134,28 @@ export function DashboardPage() {
           </div>
           <StatusPill status={row.status} />
         </div>
+        <div className="release-card">
+          <span>שעת יציאה</span>
+          <strong>
+            <Ltr>{formatTime(row.releaseAt)}</Ltr>
+          </strong>
+          {countdownLabel(row.releaseAt, now) ? <em>עוד {countdownLabel(row.releaseAt, now)}</em> : <em>אפשר לשחרר</em>}
+        </div>
         <div>
           {row.reasonText} · {row.durationMinutes} דקות
         </div>
         {row.notes ? <div className="muted">הערה פנימית: {row.notes}</div> : null}
         {row.status === "pending" ? (
-          <Button block disabled={busyId === row.id} onClick={() => void complete(row.id)}>
-            סיים, בדרכו הביתה
-          </Button>
+          <div className="stack">
+            <Button block disabled={busyId === row.id || Boolean(countdownLabel(row.releaseAt, now))} onClick={() => void complete(row.id)}>
+              {countdownLabel(row.releaseAt, now) ? `שחרור בעוד ${countdownLabel(row.releaseAt, now)}` : "סיים, בדרכו הביתה"}
+            </Button>
+            {isAdmin && countdownLabel(row.releaseAt, now) ? (
+              <Button variant="warn" block disabled={busyId === row.id} onClick={() => void complete(row.id, true)}>
+                שחרור מוקדם, נרשם על שמי
+              </Button>
+            ) : null}
+          </div>
         ) : null}
         <div className="stack">
           {related.map((note) => (

@@ -4,7 +4,7 @@ import { getApi } from "../api";
 import type { ClassRoom, Student } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { Banner, Empty, studentName } from "../components/ui";
-import { classKey } from "../lib/csv";
+import { classKey, classRank } from "../lib/csv";
 
 const RECENT_KEY = "hishaarut-recent";
 
@@ -46,7 +46,7 @@ export function SearchPage() {
         const activeClasses = nextClasses.filter((room) => room.active);
         const activeClassIds = new Set(activeClasses.map((room) => room.id));
         setStudents(nextStudents.filter((student) => student.active && activeClassIds.has(student.classId)));
-        setClasses(activeClasses);
+        setClasses([...activeClasses].sort((a, b) => classRank(a.name).localeCompare(classRank(b.name), "he")));
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "אירעה שגיאה"));
   }, []);
