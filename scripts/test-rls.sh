@@ -16,6 +16,7 @@ done
 # The follow-up migration is what an existing project pastes. Run it twice.
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260302000000_secretary_management.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260304000000_archive_delete.sql
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/migrations/20260305000000_parent_phones.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f supabase/seed.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d hishaarut_rls -f scripts/test-rls.sql
 echo "RLS checks passed"

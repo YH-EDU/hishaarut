@@ -107,6 +107,7 @@ interface NotificationDbRow {
   sent_at: string | null;
   error_text: string | null;
   recipient_phone?: string | null;
+  fallback_phones?: string[] | null;
 }
 
 const DETENTION_SELECT = `
@@ -216,6 +217,7 @@ function mapNotification(row: NotificationDbRow, includePhone: boolean): Notific
     sentAt: row.sent_at,
     errorText: row.error_text,
     recipientPhone: includePhone ? (row.recipient_phone ?? null) : undefined,
+    fallbackPhones: includePhone ? (row.fallback_phones ?? []) : undefined,
   };
 }
 
@@ -454,17 +456,27 @@ export const supabaseApi: AppApi = {
         student_id: string;
         parent_name: string | null;
         parent_phone: string | null;
+        parent_phone_2?: string | null;
+        parent_phone_no_whatsapp?: boolean;
+        parent_phone_2_no_whatsapp?: boolean;
         parent2_name?: string | null;
         parent2_phone?: string | null;
-        national_id?: string | null;
+        parent2_phone_2?: string | null;
+        parent2_phone_no_whatsapp?: boolean;
+        parent2_phone_2_no_whatsapp?: boolean;
       }[]
     ).map((row) => ({
       studentId: row.student_id,
       parentName: row.parent_name,
       parentPhone: row.parent_phone,
+      parentPhone2: row.parent_phone_2 ?? null,
+      parentPhoneNoWhatsapp: row.parent_phone_no_whatsapp ?? false,
+      parentPhone2NoWhatsapp: row.parent_phone_2_no_whatsapp ?? false,
       parent2Name: row.parent2_name ?? null,
       parent2Phone: row.parent2_phone ?? null,
-      nationalId: row.national_id ?? null,
+      parent2Phone2: row.parent2_phone_2 ?? null,
+      parent2PhoneNoWhatsapp: row.parent2_phone_no_whatsapp ?? false,
+      parent2Phone2NoWhatsapp: row.parent2_phone_2_no_whatsapp ?? false,
     }));
   },
 
@@ -476,9 +488,10 @@ export const supabaseApi: AppApi = {
       class_id: input.classId,
       parent_name: input.parentName || null,
       parent_phone: input.parentPhone || null,
+      parent_phone_2: input.parentPhone2 || null,
       parent2_name: input.parent2Name || null,
       parent2_phone: input.parent2Phone || null,
-      national_id: input.nationalId || null,
+      parent2_phone_2: input.parent2Phone2 || null,
       active: input.active,
     };
     if (input.id) {
@@ -487,6 +500,15 @@ export const supabaseApi: AppApi = {
       return;
     }
     const { error } = await client().from("students").insert(payload);
+    if (error) throw asError(error);
+  },
+
+  async setWhatsappOptOut(studentId, slot, noWhatsapp) {
+    const { error } = await client().rpc("set_student_whatsapp_opt_out", {
+      p_student_id: studentId,
+      p_slot: slot,
+      p_no_whatsapp: noWhatsapp,
+    });
     if (error) throw asError(error);
   },
 

@@ -6,9 +6,9 @@
   --muted: #5d6774;
   --line: #ddd6c8;
   --card: #fffcf7;
-  --primary: #0f6b4c;
-  --primary-dark: #0b4f38;
-  --primary-soft: #e5f4ee;
+  --primary: #007285;
+  --primary-dark: #005866;
+  --primary-soft: #e5f4f6;
   --warn: #8a4b08;
   --warn-soft: #fff1dc;
   --danger: #8d2b2b;
@@ -250,7 +250,7 @@ details.preview pre { white-space: pre-wrap; font: inherit; margin: 8px 0 0; }
   color: white;
   text-decoration: none;
   font-weight: 700;
-  box-shadow: 0 10px 24px rgba(15, 107, 76, 0.28);
+  box-shadow: 0 10px 24px rgba(0, 114, 133, 0.28);
 }
 .sheet-root { position: fixed; inset: 0; z-index: 30; }
 .sheet-backdrop { position: absolute; inset: 0; border: 0; background: rgba(28, 36, 48, 0.45); }
@@ -292,6 +292,25 @@ details.preview pre { white-space: pre-wrap; font: inherit; margin: 8px 0 0; }
 }
 .person-card b { display: block; font-size: 1.05rem; }
 .person-card .muted { display: block; }
+.people-table { min-width: 0; }
+.parent-cell { display: grid; gap: 6px; }
+.parent-cell strong { font-size: 0.98rem; }
+.phone-line { display: flex; flex-wrap: wrap; gap: 6px; }
+.wa-btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  text-decoration: none;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+.wa-btn.is-off { opacity: 0.45; }
+.wa-btn.is-compact { min-height: 32px; padding: 0 8px; }
 .sticky-search {
   position: sticky;
   top: calc(52px + env(safe-area-inset-top));
@@ -339,7 +358,7 @@ details.preview pre { white-space: pre-wrap; font: inherit; margin: 8px 0 0; }
 }
 .checklist li.done > span { background: var(--primary-soft); color: var(--primary-dark); }
 .checklist p, .checklist em { margin: 2px 0 0; color: var(--muted); font-style: normal; }
-.text-button { background: none; border: 0; color: var(--primary-dark); min-height: 36px; padding: 0; }
+.text-button { background: none; border: 0; color: var(--primary-dark); min-height: 44px; padding: 0; font-weight: 650; }
 .sidenav nav { display: grid; gap: 4px; }
 .sidenav a {
   display: block; min-height: 44px; padding: 10px 12px; border-radius: 12px;

@@ -11,6 +11,7 @@ import { maskPhone } from "../lib/phone";
 const SKIP_LABEL: Record<string, string> = {
   no_phone: "אין מספר טלפון",
   invalid_phone: "המספר לא תקין",
+  no_whatsapp: "סומן שאין וואטסאפ",
   no_homeroom: "לא שובץ מחנך/ת",
   marked_by_homeroom: "המחנך/ת סימנו בעצמם",
 };
@@ -65,7 +66,7 @@ export function DashboardPage() {
     }
   }
 
-  async function send(note: NotificationRow) {
+  async function send(note: NotificationRow, phone = note.recipientPhone ?? null) {
     if (!settings) return;
     setError(null);
     setInfo(null);
@@ -74,7 +75,7 @@ export function DashboardPage() {
     try {
       const result = await dispatchNotification({
         mode: settings.notificationMode,
-        phone: note.recipientPhone ?? null,
+        phone,
         message: note.messageBody,
         notificationId: note.id,
         event: note.event,
@@ -149,10 +150,19 @@ export function DashboardPage() {
               {note.status === "skipped" ? (
                 <span className="muted">{SKIP_LABEL[note.errorText ?? ""] ?? "לא נשלח"}</span>
               ) : (
-                <div className="row">
-                  <Button variant={note.status === "sent" ? "ghost" : "primary"} disabled={busyId === note.id} onClick={() => void send(note)}>
-                    {note.status === "sent" ? "פתיחה מחדש" : `וואטסאפ ל${recipientTitle(note)}`}
-                  </Button>
+                <div className="phone-line">
+                  {[note.recipientPhone, ...(note.fallbackPhones ?? [])]
+                    .filter((phone): phone is string => Boolean(phone))
+                    .map((phone, index) => (
+                      <Button
+                        key={phone}
+                        variant={index === 0 && note.status !== "sent" ? "primary" : "ghost"}
+                        disabled={busyId === note.id}
+                        onClick={() => void send(note, phone)}
+                      >
+                        וואטסאפ <Ltr>{maskPhone(phone)}</Ltr>
+                      </Button>
+                    ))}
                   {note.status === "sent" ? (
                     <Button variant="ghost" onClick={() => void undo(note.id)}>
                       בטל סימון

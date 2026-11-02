@@ -34,8 +34,18 @@ export function classKey(name: string): string {
   return name
     .trim()
     .toLowerCase()
-    .replace(/['׳’‘]/g, "")
+    .replace(/['׳’‘״"]/g, "")
+    .replace(/[-–—־]/g, "")
     .replace(/\s+/g, "");
+}
+
+/** Display form used in the database, for example ז׳1. */
+export function displayClassName(name: string): string {
+  const key = classKey(name);
+  const match = key.match(/^(יב|יא|[א-ת])(\d{0,2})$/);
+  if (!match) return name.trim();
+  const [, letters, number] = match;
+  return number ? `${letters}\u05F3${number}` : letters;
 }
 
 export function parseGender(value: string): Gender | null {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classKey, draftsFromMatrix, parseCsv, parseGender } from "../src/lib/csv";
+import { classKey, displayClassName, draftsFromMatrix, parseCsv, parseGender } from "../src/lib/csv";
 import { reportToCsv } from "../src/lib/exportReport";
 
 describe("csv import", () => {
@@ -11,6 +11,8 @@ describe("csv import", () => {
     expect(draft.gender).toBe("female");
     expect(draft.parentName).toBe("ברק, מיכל");
     expect(classKey(draft.className)).toBe(classKey("ז׳1"));
+    expect(classKey("ז' - 1")).toBe(classKey("ז׳1"));
+    expect(displayClassName("ז' - 1")).toBe("ז׳1");
   });
 
   it("flags a duplicate row and a missing header", () => {

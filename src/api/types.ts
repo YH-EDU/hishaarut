@@ -47,13 +47,20 @@ export interface Student {
   active: boolean;
 }
 
+export type WhatsappSlot = "parent1" | "parent1b" | "parent2" | "parent2b";
+
 export interface StudentContact {
   studentId: string;
   parentName: string | null;
   parentPhone: string | null;
+  parentPhone2: string | null;
+  parentPhoneNoWhatsapp: boolean;
+  parentPhone2NoWhatsapp: boolean;
   parent2Name: string | null;
   parent2Phone: string | null;
-  nationalId: string | null;
+  parent2Phone2: string | null;
+  parent2PhoneNoWhatsapp: boolean;
+  parent2Phone2NoWhatsapp: boolean;
 }
 
 export interface Reason {
@@ -97,6 +104,7 @@ export interface NotificationRow {
   sentAt: string | null;
   errorText: string | null;
   recipientPhone?: string | null;
+  fallbackPhones?: string[];
 }
 
 export interface DetentionInput {
@@ -115,9 +123,10 @@ export interface StudentInput {
   classId: string;
   parentName: string;
   parentPhone: string;
+  parentPhone2?: string;
   parent2Name?: string;
   parent2Phone?: string;
-  nationalId?: string;
+  parent2Phone2?: string;
   active: boolean;
 }
 
@@ -165,6 +174,7 @@ export interface AppApi {
   listStudents(): Promise<Student[]>;
   listContacts(): Promise<StudentContact[]>;
   saveStudent(input: StudentInput): Promise<void>;
+  setWhatsappOptOut(studentId: string, slot: WhatsappSlot, noWhatsapp: boolean): Promise<void>;
   countDetentions(studentIds: string[]): Promise<number>;
   setStudentsActive(ids: string[], active: boolean): Promise<void>;
   deleteStudent(id: string): Promise<void>;

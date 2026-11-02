@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { getApi } from "../api";
 import type { ClassRoom, Student, StudentContact } from "../api/types";
 import { classKey } from "../lib/csv";
@@ -6,7 +6,9 @@ import {
   IMPORT_FIELD_LABEL,
   buildPreview,
   detectColumns,
+  detectedNameOrder,
   readWorkbook,
+  type NameOrder,
   unknownClasses,
   type ColumnMapping,
   type ImportField,
@@ -16,6 +18,17 @@ import {
 import { Banner, Button } from "./ui";
 
 const FIELDS = Object.keys(IMPORT_FIELD_LABEL) as ImportField[];
+
+function parentPreview(name: string, primary: string | null, extra: string | null) {
+  const phones = [primary, extra].filter((phone): phone is string => Boolean(phone));
+  if (!name && phones.length === 0) return <span className="muted">—</span>;
+  return (
+    <span className="parent-cell">
+      <strong>{name || "—"}</strong>
+      {phones.length > 0 ? <bdi className="ltr">{phones.join(" · ")}</bdi> : null}
+    </span>
+  );
+}
 
 function gradeOf(name: string): string {
   const key = classKey(name);
@@ -42,19 +55,19 @@ export function ImportWizard({
   const [mappings, setMappings] = useState<ColumnMapping[]>([]);
   const [hasHeader, setHasHeader] = useState(true);
   const [createClasses, setCreateClasses] = useState(true);
+  const [nameOrder, setNameOrder] = useState<NameOrder>("last-first");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const sheet = sheets[sheetIndex];
-  const contactByStudent = useMemo(() => new Map(contacts.map((contact) => [contact.studentId, contact])), [contacts]);
-  const className = useMemo(() => new Map(classes.map((room) => [room.id, room.name])), [classes]);
+  const className = new Map(classes.map((room) => [room.id, room.name]));
+  void contacts;
   const existing = students.map((student) => ({
     firstName: student.firstName,
     lastName: student.lastName,
     className: className.get(student.classId) ?? "",
-    nationalId: contactByStudent.get(student.id)?.nationalId,
   }));
-  const preview = sheet ? buildPreview(sheet.rows, mappings, hasHeader, existing) : [];
+  const preview = sheet ? buildPreview(sheet.rows, mappings, hasHeader, existing, nameOrder) : [];
   const missing = unknownClasses(preview, classes.map((room) => room.name));
 
   function loadSheet(nextSheets: SheetGrid[], index: number) {
@@ -64,6 +77,7 @@ export function ImportWizard({
     setSheetIndex(index);
     setHasHeader(detected.hasHeader);
     setMappings(detected.mappings);
+    setNameOrder(detectedNameOrder(detected.mappings));
   }
 
   async function onFile(file: File) {
@@ -115,16 +129,12 @@ export function ImportWizard({
           failures.push(`שורה ${row.line}: הכיתה ${row.className || "חסרה"} לא קיימת`);
           continue;
         }
-        const idKey = row.nationalId.replace(/\D/g, "");
-        const existingStudent = students.find((student) => {
-          const contact = contactByStudent.get(student.id);
-          if (idKey && (contact?.nationalId ?? "").replace(/\D/g, "") === idKey) return true;
-          return (
+        const existingStudent = students.find(
+          (student) =>
             student.firstName === row.firstName &&
             student.lastName === row.lastName &&
-            classKey(className.get(student.classId) ?? "") === classKey(row.className)
-          );
-        });
+            classKey(className.get(student.classId) ?? "") === classKey(row.className),
+        );
         await getApi().saveStudent({
           id: existingStudent?.id,
           firstName: row.firstName,
@@ -132,10 +142,11 @@ export function ImportWizard({
           gender: row.gender,
           classId: room.id,
           parentName: row.parent1Name,
-          parentPhone: row.parent1E164 ?? row.parent1Phone,
+          parentPhone: row.parent1E164 ?? "",
+          parentPhone2: row.parent1E164b ?? "",
           parent2Name: row.parent2Name,
-          parent2Phone: row.parent2E164 ?? row.parent2Phone,
-          nationalId: row.nationalId,
+          parent2Phone: row.parent2E164 ?? "",
+          parent2Phone2: row.parent2E164b ?? "",
           active: true,
         });
         saved += 1;
@@ -216,31 +227,51 @@ export function ImportWizard({
             </table>
           </div>
           <h3>תצוגה מקדימה</h3>
-          <div className="table-scroll">
-            <table className="data-table">
+          <label className="field">
+            <span>סדר השם</span>
+            <select value={nameOrder} onChange={(event) => setNameOrder(event.target.value as NameOrder)}>
+              <option value="last-first">משפחה ואז פרטי, כמו במשוב</option>
+              <option value="first-last">פרטי ואז משפחה</option>
+            </select>
+          </label>
+          <div className="phone-only list">
+            {preview.slice(0, 8).map((row: ImportPreviewRow) => (
+              <article key={row.line} className="person-card">
+                <span>
+                  <b>
+                    {row.firstName} {row.lastName}
+                  </b>
+                  <span className="muted">
+                    {row.className || "בלי כיתה"}
+                    {row.parent1Name ? ` · אב ${row.parent1Name}` : ""}
+                    {row.parent2Name ? ` · אם ${row.parent2Name}` : ""}
+                  </span>
+                </span>
+                <span className="badge">{row.issues[0]?.message ?? "תקין"}</span>
+              </article>
+            ))}
+          </div>
+          <div className="table-scroll desktop-only">
+            <table className="data-table people-table">
               <thead>
                 <tr>
-                  <th>שורה</th>
                   <th>שם</th>
                   <th>כיתה</th>
-                  <th>ת.ז.</th>
-                  <th>טלפון 1</th>
-                  <th>טלפון 2</th>
-                  <th>הערות</th>
+                  <th>אב</th>
+                  <th>אם</th>
+                  <th>הערה</th>
                 </tr>
               </thead>
               <tbody>
                 {preview.slice(0, 12).map((row: ImportPreviewRow) => (
                   <tr key={row.line}>
-                    <td>{row.line}</td>
                     <td>
                       {row.firstName} {row.lastName}
                     </td>
                     <td>{row.className || "—"}</td>
-                    <td className="ltr">{row.nationalId || "—"}</td>
-                    <td className="ltr">{row.parent1E164 || row.parent1Phone || "—"}</td>
-                    <td className="ltr">{row.parent2E164 || row.parent2Phone || "—"}</td>
-                    <td>{row.issues.map((issue) => issue.message).join(", ") || "תקין"}</td>
+                    <td>{parentPreview(row.parent1Name, row.parent1E164, row.parent1E164b)}</td>
+                    <td>{parentPreview(row.parent2Name, row.parent2E164, row.parent2E164b)}</td>
+                    <td className="muted">{row.issues.map((issue) => issue.message).join(", ") || "תקין"}</td>
                   </tr>
                 ))}
               </tbody>
