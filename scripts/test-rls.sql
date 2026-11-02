@@ -120,10 +120,10 @@ begin
 
   begin
     update public.detentions set status = 'completed' where id = detention;
-    raise exception 'teacher completed a detention';
+    raise exception 'teacher completed a detention before the release time';
   exception
     when others then
-      if sqlerrm not like '%אין הרשאה לאשר סיום%' then
+      if sqlerrm not like '%עדיין לא הגיעה שעת היציאה%' then
         raise;
       end if;
   end;
@@ -307,6 +307,9 @@ begin
 end $$;
 
 -- Secretary completes, reads phones, and the completion message is queued.
+update public.detentions
+set release_at = now() - interval '1 minute'
+where id = current_setting('hishaarut.detention_id')::uuid;
 select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000004', false);
 set role authenticated;
 do $$
@@ -813,5 +816,168 @@ do $$
 begin
   if (select parent_phone_no_whatsapp from public.students where id = '20000000-0000-0000-0000-000000000001') is distinct from true then
     raise exception 'whatsapp flag did not stick';
+  end if;
+end $$;
+
+-- Release time is enforced with the database clock. Homeroom deletes only their class.
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+declare
+  detention uuid;
+begin
+  insert into public.detentions (student_id, reason_text, duration_minutes)
+  values ('20000000-0000-0000-0000-000000000002', 'איחור', 30)
+  returning id into detention;
+  perform set_config('hishaarut.release_detention', detention::text, false);
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000004', false);
+set role authenticated;
+do $$
+declare
+  detention uuid;
+begin
+  detention := current_setting('hishaarut.release_detention')::uuid;
+  begin
+    update public.detentions set status = 'completed' where id = detention;
+    raise exception 'secretary released before the time';
+  exception
+    when others then
+      if sqlerrm not like '%עדיין לא הגיעה שעת היציאה%' then
+        raise;
+      end if;
+  end;
+end $$;
+reset role;
+
+update public.detentions
+set release_at = now() - interval '1 minute'
+where id = current_setting('hishaarut.release_detention')::uuid;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000004', false);
+set role authenticated;
+update public.detentions
+set status = 'completed'
+where id = current_setting('hishaarut.release_detention')::uuid;
+reset role;
+
+insert into public.students (first_name, last_name, gender, class_id)
+values ('בדיקה', 'מחיקה', 'male', '10000000-0000-0000-0000-000000000001');
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000003', false);
+set role authenticated;
+do $$
+begin
+  perform public.delete_student('20000000-0000-0000-0000-000000000005', '');
+  raise exception 'homeroom deleted a student from another class';
+exception
+  when others then
+    if sqlerrm not like '%אין הרשאה למחוק את התלמיד%' then
+      raise;
+    end if;
+end $$;
+select public.delete_student(
+  (select id from public.students where first_name = 'בדיקה' and last_name = 'מחיקה'),
+  ''
+);
+reset role;
+
+do $$
+begin
+  if exists (select 1 from public.students where first_name = 'בדיקה' and last_name = 'מחיקה') then
+    raise exception 'homeroom delete of own student did not stick';
+  end if;
+  if (select status from public.detentions where id = current_setting('hishaarut.release_detention')::uuid) <> 'completed' then
+    raise exception 'release after the time did not stick';
+  end if;
+end $$;
+
+-- A teacher on duty can release once the time has passed. Early release stays admin-only.
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+declare
+  detention uuid;
+begin
+  insert into public.detentions (student_id, reason_text, duration_minutes)
+  values ('20000000-0000-0000-0000-000000000004', 'איחור', 20)
+  returning id into detention;
+  perform set_config('hishaarut.teacher_release', detention::text, false);
+  begin
+    update public.detentions
+    set status = 'completed', early_release = true
+    where id = detention;
+    raise exception 'teacher released early';
+  exception
+    when others then
+      if sqlerrm not like '%עדיין לא הגיעה שעת היציאה%' then
+        raise;
+      end if;
+  end;
+end $$;
+reset role;
+
+update public.detentions
+set release_at = now() - interval '1 minute'
+where id = current_setting('hishaarut.teacher_release')::uuid;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+update public.detentions
+set status = 'completed'
+where id = current_setting('hishaarut.teacher_release')::uuid;
+reset role;
+
+do $$
+declare
+  detention uuid := current_setting('hishaarut.teacher_release')::uuid;
+begin
+  if (select released_by from public.detentions where id = detention)
+    is distinct from '30000000-0000-0000-0000-000000000002' then
+    raise exception 'released_by was not the teacher';
+  end if;
+  if (select signed_at from public.detentions where id = detention) is null then
+    raise exception 'release time was not recorded';
+  end if;
+  if (select release_override_by from public.detentions where id = detention) is not null then
+    raise exception 'on-time release was recorded as an override';
+  end if;
+end $$;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+do $$
+declare
+  detention uuid;
+begin
+  insert into public.detentions (student_id, reason_text, duration_minutes)
+  values ('20000000-0000-0000-0000-000000000006', 'איחור', 40)
+  returning id into detention;
+  perform set_config('hishaarut.early_release', detention::text, false);
+end $$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '30000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+update public.detentions
+set status = 'completed', early_release = true
+where id = current_setting('hishaarut.early_release')::uuid;
+reset role;
+
+do $$
+declare
+  detention uuid := current_setting('hishaarut.early_release')::uuid;
+begin
+  if (select status from public.detentions where id = detention) <> 'completed' then
+    raise exception 'admin early release did not stick';
+  end if;
+  if (select release_override_by from public.detentions where id = detention)
+    is distinct from '30000000-0000-0000-0000-000000000001' then
+    raise exception 'early release was not recorded on the admin';
+  end if;
+  if (select released_by from public.detentions where id = detention)
+    is distinct from '30000000-0000-0000-0000-000000000001' then
+    raise exception 'released_by was not the admin';
   end if;
 end $$;

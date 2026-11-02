@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { getApi } from "../api";
 import type { ClassRoom, Gender, Student, StudentContact } from "../api/types";
 import { useAuth } from "../auth";
 import { ImportWizard } from "../components/ImportWizard";
 import { EmptyState, PageHeader } from "../components/PageHeader";
+import { classRank } from "../lib/csv";
 import { Sheet } from "../components/Sheet";
 import { WhatsAppButton } from "../components/WhatsAppButton";
 import { Banner, Button, Field } from "../components/ui";
@@ -14,8 +15,8 @@ type SortKey = "name" | "className" | "phone";
 type Pending =
   | { kind: "students-active"; ids: string[]; active: boolean; title: string; body: string }
   | { kind: "class-active"; ids: string[]; name: string; active: boolean; studentCount: number }
-  | { kind: "delete-student"; id: string; name: string }
-  | { kind: "delete-class"; id: string; name: string; studentCount: number }
+  | { kind: "delete-student"; id: string; name: string; needsName: boolean }
+  | { kind: "delete-class"; id: string; name: string; studentCount: number; needsName: boolean }
   | { kind: "blocked-student"; id: string; name: string }
   | { kind: "blocked-class"; id: string; name: string };
 
@@ -50,17 +51,17 @@ export function RosterPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [openClassId, setOpenClassId] = useState<string | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
   const [pickedStudents, setPickedStudents] = useState<string[]>([]);
   const [pickedClasses, setPickedClasses] = useState<string[]>([]);
   const [includeStudents, setIncludeStudents] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
+  const [confirmText, setConfirmText] = useState("");
 
   const visibleClasses = classes.filter(
     (room) => managesAll || role === "teacher" || room.homeroomTeacherId === session?.userId,
   );
-  const shownClasses = visibleClasses.filter((room) => showArchived || room.active);
+  const shownClasses = visibleClasses.filter((room) => room.active);
   const classNames = useMemo(() => new Map(classes.map((room) => [room.id, room.name])), [classes]);
   const contactMap = useMemo(() => new Map(contacts.map((contact) => [contact.studentId, contact])), [contacts]);
 
@@ -83,7 +84,7 @@ export function RosterPage() {
     const q = query.trim();
     const list = students.filter((student) => {
       if (!visibleClasses.some((room) => room.id === student.classId)) return false;
-      if (!showArchived && !student.active) return false;
+      if (!student.active) return false;
       if (classId && student.classId !== classId) return false;
       if (!q) return true;
       const contact = contactMap.get(student.id);
@@ -95,8 +96,12 @@ export function RosterPage() {
       if (sort.key === "phone") return contactMap.get(student.id)?.parentPhone ?? "";
       return `${student.lastName} ${student.firstName}`;
     };
-    return [...list].sort((a, b) => value(a).localeCompare(value(b), "he") * sort.dir);
-  }, [students, visibleClasses, showArchived, classId, query, sort, classNames, contactMap]);
+    return [...list].sort((a, b) => {
+      const byClass = classRank(classNames.get(a.classId) ?? "").localeCompare(classRank(classNames.get(b.classId) ?? ""), "he");
+      if (byClass !== 0) return byClass;
+      return value(a).localeCompare(value(b), "he") * sort.dir;
+    });
+  }, [students, visibleClasses, classId, query, sort, classNames, contactMap]);
 
   function toggleSort(key: SortKey) {
     setSort((current) => (current.key === key ? { key, dir: current.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
@@ -167,6 +172,11 @@ export function RosterPage() {
     return `${student.firstName} ${student.lastName}`;
   }
 
+  function canEdit(student: Student) {
+    if (managesAll) return true;
+    return role === "homeroom" && classes.some((room) => room.id === student.classId && room.homeroomTeacherId === session?.userId);
+  }
+
   function askStudentActive(list: Student[], active: boolean) {
     if (list.length === 0) return;
     const title = list.length === 1 ? studentTitle(list[0]) : `${list.length} תלמידים`;
@@ -192,7 +202,8 @@ export function RosterPage() {
     try {
       const count = await getApi().countDetentions([student.id]);
       const name = studentTitle(student);
-      setPending(count > 0 ? { kind: "blocked-student", id: student.id, name } : { kind: "delete-student", id: student.id, name });
+      setConfirmText("");
+      setPending({ kind: "delete-student", id: student.id, name, needsName: count > 0 });
     } catch (err) {
       setError(err instanceof Error ? err.message : "אירעה שגיאה");
     }
@@ -204,9 +215,13 @@ export function RosterPage() {
     try {
       const count = await getApi().countDetentions(ids);
       setPending(
-        count > 0
-          ? { kind: "blocked-class", id: room.id, name: room.name }
-          : { kind: "delete-class", id: room.id, name: room.name, studentCount: ids.length },
+        {
+          kind: "delete-class",
+          id: room.id,
+          name: room.name,
+          studentCount: ids.length,
+          needsName: count > 0,
+        },
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "אירעה שגיאה");
@@ -229,12 +244,12 @@ export function RosterPage() {
         setPickedClasses((current) => current.filter((id) => !pending.ids.includes(id)));
         setInfo(pending.active ? "הכיתה שוחזרה" : "הכיתה הועברה לארכיון");
       } else if (pending.kind === "delete-student") {
-        await getApi().deleteStudent(pending.id);
+        await getApi().deleteStudent(pending.id, confirmText);
         setOpenId(null);
         setPickedStudents((current) => current.filter((id) => id !== pending.id));
         setInfo(`${pending.name} נמחק`);
       } else {
-        await getApi().deleteClass(pending.id);
+        await getApi().deleteClass(pending.id, confirmText);
         setOpenClassId(null);
         setPickedClasses((current) => current.filter((id) => id !== pending.id));
         setInfo(`כיתה ${pending.name} נמחקה`);
@@ -257,7 +272,7 @@ export function RosterPage() {
     <div className="stack">
       <PageHeader
         title="תלמידים וכיתות"
-        lede="שם, כיתה, וההורים. ארכיון ומחיקה נשארים בפרטי התלמיד."
+        lede="לפי כיתות. עריכה ומחיקה על כל תלמיד."
       />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
@@ -314,9 +329,6 @@ export function RosterPage() {
                     {managesAll ? (
                       <td>
                         <div className="row">
-                          <Button variant="ghost" onClick={() => askClassActive(room, !room.active)}>
-                            {room.active ? "ארכיון" : "שחזור"}
-                          </Button>
                           <Button variant="danger" onClick={() => void askDeleteClass(room)}>
                             מחיקה
                           </Button>
@@ -333,28 +345,6 @@ export function RosterPage() {
             </table>
           </div>
         )}
-        {managesAll && pickedClasses.length > 0 ? (
-          <div className="row">
-            <Button
-              onClick={() => {
-                const rooms = shownClasses.filter((room) => pickedClasses.includes(room.id));
-                if (rooms.length === 1) askClassActive(rooms[0], false);
-                else {
-                  setIncludeStudents(true);
-                  setPending({
-                    kind: "class-active",
-                    ids: rooms.map((room) => room.id),
-                    name: `${rooms.length} כיתות`,
-                    active: false,
-                    studentCount: students.filter((student) => rooms.some((room) => room.id === student.classId)).length,
-                  });
-                }
-              }}
-            >
-              ארכיון כיתות נבחרות ({pickedClasses.length})
-            </Button>
-          </div>
-        ) : null}
         {managesAll ? (
           <div className="toolbar">
             <input value={className} placeholder="שם כיתה, למשל ז׳3" onChange={(event) => setClassName(event.target.value)} />
@@ -391,21 +381,7 @@ export function RosterPage() {
               </option>
             ))}
           </select>
-          <label className="check-row">
-            <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
-            הצגת ארכיון
-          </label>
         </div>
-        {managesAll && pickedStudents.length > 0 ? (
-          <div className="row desktop-only">
-            <Button onClick={() => askStudentActive(rows.filter((student) => pickedStudents.includes(student.id)), false)}>
-              ארכיון תלמידים נבחרים ({pickedStudents.length})
-            </Button>
-            <Button variant="ghost" onClick={() => askStudentActive(rows.filter((student) => pickedStudents.includes(student.id)), true)}>
-              שחזור נבחרים
-            </Button>
-          </div>
-        ) : null}
         {students.length === 0 ? (
           <EmptyState title="אין עדיין תלמידים" detail="אחרי שיש כיתה, ייבאו קובץ או הוסיפו תלמיד מהטופס למטה." />
         ) : rows.length === 0 ? (
@@ -413,19 +389,32 @@ export function RosterPage() {
         ) : (
           <>
           <div className="phone-only list">
-            {rows.map((student) => (
-              <button key={student.id} type="button" className="person-card" onClick={() => setOpenId(student.id)}>
-                <span>
-                  <b>
-                    {student.firstName} {student.lastName}
-                  </b>
-                  <span className="muted">
-                    {classNames.get(student.classId)}
-                    {student.active ? "" : " · בארכיון"}
-                  </span>
-                </span>
-              </button>
-            ))}
+            {rows.map((student, index) => {
+              const classLabel = classNames.get(student.classId) ?? "";
+              const previous = index > 0 ? classNames.get(rows[index - 1].classId) : "";
+              return (
+                <div key={student.id} className="stack">
+                  {classLabel !== previous ? <h2 className="class-head">{classLabel}</h2> : null}
+                  <div className="person-card">
+                    <button type="button" className="card-main" onClick={() => setOpenId(student.id)}>
+                      <b>
+                        {student.firstName} {student.lastName}
+                      </b>
+                    </button>
+                    {canEdit(student) ? (
+                      <span className="icon-row">
+                        <button type="button" className="icon-btn" aria-label="עריכה" onClick={() => setOpenId(student.id)}>
+                          עריכה
+                        </button>
+                        <button type="button" className="icon-btn danger" aria-label="מחיקה" onClick={() => void askDeleteStudent(student)}>
+                          מחיקה
+                        </button>
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div className="table-scroll desktop-only">
             <table className="data-table people-table">
@@ -459,12 +448,22 @@ export function RosterPage() {
                   </th>
                   {canSeePhones ? <th>אב</th> : null}
                   {canSeePhones ? <th>אם</th> : null}
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((student) => {
+                {rows.map((student, index) => {
                   const contact = contactMap.get(student.id);
+                  const classLabel = classNames.get(student.classId) ?? "";
+                  const previous = index > 0 ? classNames.get(rows[index - 1].classId) : "";
+                  const columns = 3 + (canSeePhones ? 2 : 0) + (managesAll ? 1 : 0);
                   return (
+                    <Fragment key={student.id}>
+                    {classLabel !== previous ? (
+                      <tr key={`${student.classId}-head`} className="class-row">
+                        <td colSpan={columns}>{classLabel}</td>
+                      </tr>
+                    ) : null}
                     <tr key={student.id}>
                       {managesAll ? (
                         <td>
@@ -481,7 +480,6 @@ export function RosterPage() {
                       <td>
                         <button type="button" className="text-button" onClick={() => setOpenId(student.id)}>
                           {student.firstName} {student.lastName}
-                          {student.active ? "" : " · בארכיון"}
                         </button>
                       </td>
                       <td>{classNames.get(student.classId)}</td>
@@ -493,6 +491,7 @@ export function RosterPage() {
                               { phone: contact?.parentPhone, off: contact?.parentPhoneNoWhatsapp },
                               { phone: contact?.parentPhone2, off: contact?.parentPhone2NoWhatsapp },
                             ]}
+                            showLink={managesAll}
                           />
                         </td>
                       ) : null}
@@ -504,10 +503,24 @@ export function RosterPage() {
                               { phone: contact?.parent2Phone, off: contact?.parent2PhoneNoWhatsapp },
                               { phone: contact?.parent2Phone2, off: contact?.parent2Phone2NoWhatsapp },
                             ]}
+                            showLink={managesAll}
                           />
                         </td>
                       ) : null}
+                      <td>
+                        {canEdit(student) ? (
+                          <span className="icon-row">
+                            <button type="button" className="icon-btn" aria-label="עריכה" onClick={() => setOpenId(student.id)}>
+                              עריכה
+                            </button>
+                            <button type="button" className="icon-btn danger" aria-label="מחיקה" onClick={() => void askDeleteStudent(student)}>
+                              מחיקה
+                            </button>
+                          </span>
+                        ) : null}
+                      </td>
                     </tr>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -582,15 +595,10 @@ export function RosterPage() {
                     {student.active ? "אפשר לסמן את התלמיד להשארות ממסך הסימון." : "התלמיד בארכיון."}
                   </p>
                 )}
-                {managesAll ? (
-                  <div className="row">
-                    <Button variant="ghost" onClick={() => askStudentActive([student], !student.active)}>
-                      {student.active ? "העברה לארכיון" : "שחזור"}
-                    </Button>
-                    <Button variant="danger" onClick={() => void askDeleteStudent(student)}>
-                      מחיקה לצמיתות
-                    </Button>
-                  </div>
+                {canEdit(student) ? (
+                  <Button variant="danger" onClick={() => void askDeleteStudent(student)}>
+                    מחיקה
+                  </Button>
                 ) : null}
               </div>
             );
@@ -655,9 +663,6 @@ export function RosterPage() {
                     {room.active ? "פעילה" : "בארכיון"} · {students.filter((student) => student.classId === room.id).length} תלמידים
                   </span>
                 </p>
-                <Button onClick={() => askClassActive(room, !room.active)}>
-                  {room.active ? "העברה לארכיון" : "שחזור"}
-                </Button>
                 <Button variant="danger" onClick={() => void askDeleteClass(room)}>
                   מחיקה לצמיתות
                 </Button>
@@ -701,9 +706,20 @@ export function RosterPage() {
               </Button>
             ) : null}
             {pending.kind === "delete-student" || pending.kind === "delete-class" ? (
-              <Button variant="danger" disabled={busy} onClick={() => void applyPending()}>
-                מחיקה לצמיתות
-              </Button>
+              <>
+                {pending.needsName ? (
+                  <Field label={pending.kind === "delete-student" ? "הקלידו את שם התלמיד" : "הקלידו את שם הכיתה"}>
+                    <input value={confirmText} onChange={(event) => setConfirmText(event.target.value)} />
+                  </Field>
+                ) : null}
+                <Button
+                  variant="danger"
+                  disabled={busy || (pending.needsName && confirmText.trim() !== pending.name)}
+                  onClick={() => void applyPending()}
+                >
+                  מחיקה לצמיתות
+                </Button>
+              </>
             ) : null}
             <Button variant="ghost" onClick={() => setPending(null)}>
               ביטול
@@ -730,9 +746,11 @@ export function RosterPage() {
 function ParentBits({
   name,
   phones,
+  showLink,
 }: {
   name?: string | null;
   phones: Array<{ phone?: string | null; off?: boolean }>;
+  showLink: boolean;
 }) {
   const shown = phones.filter((item) => item.phone);
   if (!name && shown.length === 0) return <span className="muted">—</span>;
@@ -742,7 +760,11 @@ function ParentBits({
       <div className="phone-line">
         {shown.length === 0 ? <span className="muted">אין טלפון</span> : null}
         {shown.map((item) => (
-          <WhatsAppButton key={item.phone} phone={item.phone ?? ""} message="שלום" off={item.off} compact />
+          showLink ? (
+            <WhatsAppButton key={item.phone} phone={item.phone ?? ""} message="שלום" off={item.off} compact />
+          ) : (
+            <bdi key={item.phone} className="ltr">{item.phone}</bdi>
+          )
         ))}
       </div>
     </div>
@@ -799,11 +821,16 @@ function confirmBody(pending: Pending): string {
       ? "הכיתה תחזור לרשימות ולסימון."
       : "הכיתה תוסתר מרשימות ומסימון. ההיסטוריה נשארת בדוחות.";
   }
-  if (pending.kind === "delete-student") return "אין השארות רשומות. המחיקה לא ניתנת לביטול.";
+  if (pending.kind === "delete-student") {
+    return pending.needsName
+      ? `ל${pending.name} יש היסטוריית השארות. המחיקה תסיר גם אותה מהדוחות. הקלידו את השם המלא לאישור.`
+      : "אין השארות רשומות. המחיקה לא ניתנת לביטול.";
+  }
   if (pending.kind === "delete-class") {
+    if (pending.needsName) return `לכיתה יש היסטוריית השארות. המחיקה תסיר את התלמידים ואת ההיסטוריה. הקלידו ${pending.name} לאישור.`;
     return pending.studentCount > 0
-      ? `אין השארות. יימחקו גם ${pending.studentCount} תלמידים בלי היסטוריה. המחיקה לא ניתנת לביטול.`
-      : "אין תלמידים ואין השארות. המחיקה לא ניתנת לביטול.";
+      ? `יימחקו גם ${pending.studentCount} תלמידים. אין להם היסטוריית השארות.`
+      : "אין תלמידים בכיתה. המחיקה לא ניתנת לביטול.";
   }
   return "יש השארות רשומות, לכן המחיקה חסומה. אפשר להעביר לארכיון, וההיסטוריה תישאר בדוחות.";
 }

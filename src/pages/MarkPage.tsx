@@ -4,7 +4,7 @@ import { getApi } from "../api";
 import type { Detention, Reason, Student } from "../api/types";
 import { useAuth } from "../auth";
 import { Banner, Button, Field, studentName } from "../components/ui";
-import { jerusalemToday } from "../lib/dates";
+import { formatTime, jerusalemClock, jerusalemDateTimeIso, jerusalemToday } from "../lib/dates";
 import { rememberStudent } from "./SearchPage";
 
 const DURATIONS = [15, 30, 45, 60];
@@ -23,6 +23,8 @@ export function MarkPage() {
   const [minutes, setMinutes] = useState(30);
   const [customMinutes, setCustomMinutes] = useState("");
   const [notes, setNotes] = useState("");
+  const [releaseTime, setReleaseTime] = useState(() => jerusalemClock(new Date(Date.now() + 30 * 60000)));
+  const [releaseEdited, setReleaseEdited] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -51,6 +53,7 @@ export function MarkPage() {
   }, [id]);
 
   const duration = customMinutes ? Number(customMinutes) : minutes;
+  const releaseIso = jerusalemDateTimeIso(releaseTime || jerusalemClock());
   const reasonText = reasonId === "other" ? freeText.trim() : (reasons.find((reason) => reason.id === reasonId)?.label ?? "");
   const ready = Boolean(student) && reasonText.length > 0 && duration >= 1 && duration <= 240;
 
@@ -65,6 +68,7 @@ export function MarkPage() {
         reasonText,
         durationMinutes: duration,
         notes: notes.trim() || null,
+        releaseAt: releaseIso,
       });
       rememberStudent(student.id);
       const verb = student.gender === "female" ? "סומנה" : "סומן";
@@ -152,6 +156,7 @@ export function MarkPage() {
               onClick={() => {
                 setMinutes(value);
                 setCustomMinutes("");
+                if (!releaseEdited) setReleaseTime(jerusalemClock(new Date(Date.now() + value * 60000)));
               }}
             >
               {value}
@@ -167,6 +172,22 @@ export function MarkPage() {
           />
         </Field>
       </section>
+      <label className="release-card">
+        <span>שעת יציאה</span>
+        <strong>
+          <bdi className="ltr">{formatTime(releaseIso)}</bdi>
+        </strong>
+        <input
+          type="time"
+          lang="en-GB"
+          aria-label="שעת יציאה"
+          value={releaseTime}
+          onChange={(event) => {
+            setReleaseEdited(true);
+            setReleaseTime(event.target.value);
+          }}
+        />
+      </label>
       <details>
         <summary>הערה פנימית, לא נשלחת להורים</summary>
         <Field label="הערה">

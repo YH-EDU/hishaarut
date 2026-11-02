@@ -1,4 +1,3 @@
-import { blockedDeleteMessage } from "../lib/archive";
 import { asError } from "../lib/errors";
 import { pagesRedirectUrl } from "../lib/supabaseKey";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
@@ -70,6 +69,7 @@ interface DetentionRow {
   duration_minutes: number;
   status: Detention["status"];
   detention_date: string;
+  release_at: string;
   marked_by: string;
   marked_at: string;
   signed_by: string | null;
@@ -93,6 +93,7 @@ interface DetentionRow {
     | null;
   marker: { full_name: string } | { full_name: string }[] | null;
   signer: { full_name: string } | { full_name: string }[] | null;
+  releaser: { full_name: string } | { full_name: string }[] | null;
 }
 
 interface NotificationDbRow {
@@ -111,14 +112,15 @@ interface NotificationDbRow {
 }
 
 const DETENTION_SELECT = `
-  id, student_id, reason_id, reason_text, duration_minutes, status, detention_date,
-  marked_by, marked_at, signed_by, signed_at, notes,
+  id, student_id, reason_id, reason_text, duration_minutes, status, detention_date, release_at,
+  marked_by, marked_at, signed_by, signed_at, released_by, notes,
   student:students!detentions_student_id_fkey (
     first_name, last_name, gender, class_id,
     class:classes!students_class_id_fkey ( name )
   ),
   marker:profiles!detentions_marked_by_fkey ( full_name ),
-  signer:profiles!detentions_signed_by_fkey ( full_name )
+  signer:profiles!detentions_signed_by_fkey ( full_name ),
+  releaser:profiles!detentions_released_by_fkey ( full_name )
 `;
 
 function client() {
@@ -181,6 +183,7 @@ function mapDetention(row: DetentionRow): Detention {
   const classRoom = one(student?.class ?? null);
   const marker = one(row.marker);
   const signer = one(row.signer);
+  const releaser = one(row.releaser);
   return {
     id: row.id,
     studentId: row.student_id,
@@ -189,6 +192,7 @@ function mapDetention(row: DetentionRow): Detention {
     durationMinutes: row.duration_minutes,
     status: row.status,
     detentionDate: row.detention_date,
+    releaseAt: row.release_at,
     markedBy: row.marked_by,
     markedAt: row.marked_at,
     signedBy: row.signed_by,
@@ -201,6 +205,7 @@ function mapDetention(row: DetentionRow): Detention {
     className: classRoom?.name ?? "",
     markerName: marker?.full_name ?? "",
     signerName: signer?.full_name ?? null,
+    releaserName: releaser?.full_name ?? signer?.full_name ?? null,
   };
 }
 
@@ -245,10 +250,6 @@ function requireRows<T extends { id: string }>(data: T[] | null, error: { messag
   if (error) throw asError(error);
   if (!data || data.length === 0) throw new Error("אין הרשאה לפעולה הזו");
   return data;
-}
-
-function isForeignKey(error: { message: string } | null): boolean {
-  return Boolean(error && /foreign key|23503|restrict/i.test(error.message));
 }
 
 async function queryDetentionCount(studentIds: string[]): Promise<number> {
@@ -419,24 +420,9 @@ export const supabaseApi: AppApi = {
     if (studentError) throw asError(studentError);
   },
 
-  async deleteClass(id) {
-    const { data: room, error } = await client().from("classes").select("id, name").eq("id", id).maybeSingle();
+  async deleteClass(id, confirmName) {
+    const { error } = await client().rpc("delete_class", { p_id: id, p_confirm: confirmName ?? "" });
     if (error) throw asError(error);
-    if (!room) throw new Error("הכיתה לא נמצאה");
-    const name = `כיתה ${(room as { name: string }).name}`;
-    const { data: kids, error: kidsError } = await client().from("students").select("id").eq("class_id", id);
-    if (kidsError) throw asError(kidsError);
-    const ids = ((kids ?? []) as { id: string }[]).map((kid) => kid.id);
-    if ((await queryDetentionCount(ids)) > 0) throw new Error(blockedDeleteMessage(name));
-    if (ids.length > 0) {
-      const { data: removed, error: deleteKids } = await client().from("students").delete().in("id", ids).select("id");
-      if (isForeignKey(deleteKids)) throw new Error(blockedDeleteMessage(name));
-      if (deleteKids) throw asError(deleteKids);
-      if ((removed?.length ?? 0) !== ids.length) throw new Error("אין הרשאה לפעולה הזו");
-    }
-    const { data: removedClass, error: deleteRoom } = await client().from("classes").delete().eq("id", id).select("id");
-    if (isForeignKey(deleteRoom)) throw new Error(blockedDeleteMessage(name));
-    requireRows(removedClass as { id: string }[] | null, deleteRoom);
   },
 
   async listStudents() {
@@ -523,20 +509,9 @@ export const supabaseApi: AppApi = {
     if (rows.length !== ids.length) throw new Error("אין הרשאה לפעולה הזו");
   },
 
-  async deleteStudent(id) {
-    const { data: student, error } = await client()
-      .from("students")
-      .select("id, first_name, last_name")
-      .eq("id", id)
-      .maybeSingle();
+  async deleteStudent(id, confirmName) {
+    const { error } = await client().rpc("delete_student", { p_id: id, p_confirm: confirmName ?? "" });
     if (error) throw asError(error);
-    if (!student) throw new Error("התלמיד לא נמצא");
-    const row = student as { first_name: string; last_name: string };
-    const name = `${row.first_name} ${row.last_name}`;
-    if ((await queryDetentionCount([id])) > 0) throw new Error(blockedDeleteMessage(name));
-    const { data, error: deleteError } = await client().from("students").delete().eq("id", id).select("id");
-    if (isForeignKey(deleteError)) throw new Error(blockedDeleteMessage(name));
-    requireRows(data as { id: string }[] | null, deleteError);
   },
 
   async listReasons() {
@@ -597,6 +572,7 @@ export const supabaseApi: AppApi = {
         reason_text: input.reasonText,
         duration_minutes: input.durationMinutes,
         notes: input.notes,
+        release_at: input.releaseAt ?? null,
       })
       .select("id")
       .single();
@@ -604,8 +580,9 @@ export const supabaseApi: AppApi = {
     return (data as { id: string }).id;
   },
 
-  async completeDetention(id) {
-    const { data, error } = await client().from("detentions").update({ status: "completed" }).eq("id", id).select("id");
+  async completeDetention(id, early = false) {
+    const payload = early ? { status: "completed" as const, early_release: true } : { status: "completed" as const };
+    const { data, error } = await client().from("detentions").update(payload).eq("id", id).select("id");
     requireRows(data as { id: string }[] | null, error);
   },
 

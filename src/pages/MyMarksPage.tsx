@@ -42,8 +42,14 @@ export function MyMarksPage() {
             <strong>{studentName(row.studentFirstName, row.studentLastName)}</strong>
             <StatusPill status={row.status} />
           </div>
+          <div className="release-card">
+            <span>שעת יציאה</span>
+            <strong>
+              <Ltr>{formatTime(row.releaseAt)}</Ltr>
+            </strong>
+          </div>
           <span>
-            {row.className} · {row.reasonText} · {row.durationMinutes} דק׳ · <Ltr>{formatTime(row.markedAt)}</Ltr>
+            {row.className} · {row.reasonText} · {row.durationMinutes} דק׳
           </span>
           {row.status === "pending" ? (
             <Button variant="danger" onClick={() => void cancel(row.id)}>
