@@ -91,6 +91,7 @@ export interface Detention {
   className: string;
   markerName: string;
   signerName: string | null;
+  releaserName: string | null;
 }
 
 export interface NotificationRow {

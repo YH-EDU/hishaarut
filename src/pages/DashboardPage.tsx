@@ -44,7 +44,9 @@ export function DashboardPage() {
   const [fallback, setFallback] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const isAdmin = useAuth().session?.profile.role === "admin";
+  const role = useAuth().session?.profile.role;
+  const isAdmin = role === "admin";
+  const canMessage = role === "secretary" || role === "admin";
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -53,15 +55,14 @@ export function DashboardPage() {
 
   const load = useCallback(async () => {
     const today = jerusalemToday();
-    const [detentions, dispatch, school] = await Promise.all([
-      getApi().listDetentions({ date: today }),
-      getApi().listDispatch(today),
-      getApi().getSettings(),
-    ]);
+    const detentions = await getApi().listDetentions({ date: today });
+    const [dispatch, school] = canMessage
+      ? await Promise.all([getApi().listDispatch(today), getApi().getSettings()])
+      : [[], null];
     setRows(detentions);
     setNotes(dispatch);
     setSettings(school);
-  }, []);
+  }, [canMessage]);
 
   useEffect(() => {
     void load().catch((err: unknown) => setError(err instanceof Error ? err.message : "אירעה שגיאה"));
@@ -173,6 +174,7 @@ export function DashboardPage() {
   }
 
   function whatsappLink(row: Detention) {
+    if (!canMessage) return null;
     const note = parentNote(row);
     const phone = note?.recipientPhone;
     if (!phone || !note) return null;
@@ -186,7 +188,7 @@ export function DashboardPage() {
     <div className="stack release-screen">
       <header className="release-head">
         <div>
-          <h1>היום</h1>
+          <h1>שחרורים</h1>
           <p className="release-counts">
             <span>
               <b>{ready.length}</b> מוכנים
@@ -235,7 +237,7 @@ export function DashboardPage() {
       {settings?.notificationMode === "cloud_api" ? <Banner tone="warn">שליחה אוטומטית עדיין לא פעילה.</Banner> : null}
 
       <div className="desktop-only">
-        <table className="release-table">
+        <table className={canMessage ? "release-table" : "release-table no-wa"}>
           <thead>
             <tr>
               <th>תלמיד</th>
@@ -351,7 +353,9 @@ export function DashboardPage() {
             </p>
             {open.notes ? <p>{open.notes}</p> : null}
             <p className="muted">סימן {open.markerName}</p>
-            {openNotes.map((note) => (
+            {open.status === "completed" ? <ReleasedBy row={open} /> : null}
+            {canMessage
+              ? openNotes.map((note) => (
               <div key={note.id} className="stack">
                 <span>
                   {note.recipientType === "parent" ? "הורה" : "מחנך/ת"}
@@ -366,7 +370,8 @@ export function DashboardPage() {
                     </Button>
                   ))}
               </div>
-            ))}
+            ))
+              : null}
             {open.status === "pending" && !waitLabel(open.releaseAt, now) ? (
               <Button disabled={busyId === open.id} onClick={() => void complete(open.id)}>
                 שחרור
@@ -387,19 +392,24 @@ export function DashboardPage() {
     const waiting = waitLabel(row.releaseAt, now);
     const link = whatsappLink(row);
     return (
-      <div key={row.id} className="release-row" onClick={() => setOpenId(row.id)}>
+      <div
+        key={row.id}
+        className={`release-row${canMessage ? "" : " no-wa"}${row.status === "completed" ? " is-done" : ""}`}
+        onClick={() => setOpenId(row.id)}
+      >
         <span className="who">
           <b>{studentLabel(row)}</b>
           <span className="klass">{row.className}</span>
         </span>
         <TimeChip waiting={waiting} releaseAt={row.releaseAt} />
-        {link ? <WaLink href={link} /> : <span className="wa-gap" />}
-        <ReleaseControl
-          status={row.status}
-          waiting={waiting}
-          busy={busyId === row.id || busyId === "all"}
-          onRelease={() => void complete(row.id)}
-        />
+        {row.status === "completed" ? (
+          <ReleasedBy row={row} />
+        ) : (
+          <>
+            {canMessage ? link ? <WaLink href={link} /> : <span className="wa-gap" /> : null}
+            <ReleaseControl row={row} waiting={waiting} busy={busyId === row.id || busyId === "all"} onRelease={() => void complete(row.id)} />
+          </>
+        )}
       </div>
     );
   }
@@ -444,7 +454,7 @@ function ReleaseTableRow({
       </td>
       <td>{link ? <WaLink href={link} /> : null}</td>
       <td>
-        <ReleaseControl status={row.status} waiting={waiting} busy={busy} onRelease={onRelease} />
+        <ReleaseControl row={row} waiting={waiting} busy={busy} onRelease={onRelease} />
       </td>
     </tr>
   );
@@ -462,18 +472,28 @@ function WaLink({ href }: { href: string }) {
   );
 }
 
+function ReleasedBy({ row }: { row: Detention }) {
+  const name = row.releaserName || row.signerName;
+  if (row.status !== "completed" || !name || !row.signedAt) return <span className="released-label">שוחרר</span>;
+  return (
+    <span className="released-by">
+      שוחרר על ידי {name} בשעה <Ltr>{formatTime(row.signedAt)}</Ltr>
+    </span>
+  );
+}
+
 function ReleaseControl({
-  status,
+  row,
   waiting,
   busy,
   onRelease,
 }: {
-  status: Detention["status"];
+  row: Detention;
   waiting: string | null;
   busy: boolean;
   onRelease: () => void;
 }) {
-  if (status !== "pending") return <span className="released-label">שוחרר</span>;
+  if (row.status !== "pending") return <ReleasedBy row={row} />;
   return (
     <button
       type="button"

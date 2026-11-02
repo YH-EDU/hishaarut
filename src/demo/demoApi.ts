@@ -165,6 +165,7 @@ function todayBoard(
       className: room?.name ?? "",
       markerName: marker.name,
       signerName: released ? "דנה מזכירה" : null,
+      releaserName: released ? "דנה מזכירה" : null,
     };
     detentions.push(detention);
     const phone = contacts[student.id]?.parentPhone?.replace(/\D/g, "");
@@ -709,6 +710,7 @@ export const demoApi: AppApi = {
       className: room?.name ?? "",
       markerName: profile.fullName,
       signerName: null,
+      releaserName: null,
     };
     state.detentions.unshift(detention);
     enqueue(detention, "marked");
@@ -718,7 +720,7 @@ export const demoApi: AppApi = {
 
   async completeDetention(id, early = false) {
     const profile = requireUser();
-    if (!canSign(profile)) throw new Error("אין הרשאה לאשר סיום");
+    if (!isStaff(profile)) throw new Error("אין הרשאה לאשר סיום");
     const detention = state.detentions.find((item) => item.id === id);
     if (!detention || detention.status !== "pending") throw new Error("מעבר סטטוס אינו חוקי");
     if (new Date(detention.releaseAt).getTime() > Date.now() && !(early && profile.role === "admin")) {
@@ -728,6 +730,7 @@ export const demoApi: AppApi = {
     detention.signedBy = profile.id;
     detention.signedAt = new Date().toISOString();
     detention.signerName = profile.fullName;
+    detention.releaserName = profile.fullName;
     enqueue(detention, "completed");
     emitChange();
   },

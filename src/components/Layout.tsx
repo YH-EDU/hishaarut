@@ -3,16 +3,17 @@ import { NavLink, Outlet, Link, useLocation } from "react-router-dom";
 import { getApi } from "../api";
 import type { Role } from "../api/types";
 import { useAuth } from "../auth";
+import { jerusalemToday } from "../lib/dates";
 import { Sheet } from "./Sheet";
 
 interface NavItem {
   to: string;
   label: string;
-  icon: "today" | "mark" | "students" | "more" | "account";
+  icon: "today" | "mark" | "students" | "more" | "account" | "release";
 }
 
 function desktopNav(role: Role): Array<{ to: string; label: string }> {
-  const today = { to: "/dashboard", label: "היום" };
+  const releases = { to: "/dashboard", label: "שחרורים" };
   const mark = { to: "/search", label: "סימון תלמיד" };
   const mine = { to: "/mine", label: "הסימונים שלי" };
   const students = { to: "/roster", label: "תלמידים וכיתות" };
@@ -20,26 +21,28 @@ function desktopNav(role: Role): Array<{ to: string; label: string }> {
   const staff = { to: "/staff", label: "צוות" };
   const reports = { to: "/reports", label: "דוחות" };
   const settings = { to: "/settings", label: "הגדרות" };
-  if (role === "admin") return [today, students, staff, mark, reports, settings];
-  if (role === "secretary") return [today, students, mark, staff, reports];
-  if (role === "homeroom") return [mark, ownClass, mine];
-  return [mark, mine];
+  if (role === "admin") return [releases, students, staff, mark, reports, settings];
+  if (role === "secretary") return [releases, students, mark, staff, reports];
+  if (role === "homeroom") return [releases, mark, ownClass, mine];
+  return [releases, mark, mine];
 }
 
 function phoneTabs(role: Role): NavItem[] {
-  const today = { to: role === "teacher" || role === "homeroom" ? "/mine" : "/dashboard", label: "היום", icon: "today" as const };
+  const releases = { to: "/dashboard", label: "שחרורים", icon: "release" as const };
+  const today = { to: "/mine", label: "היום", icon: "today" as const };
   const mark = { to: "/search", label: "סימון", icon: "mark" as const };
   const ownClass = { to: "/class", label: "הכיתה שלי", icon: "students" as const };
   const students = { to: "/roster", label: "תלמידים", icon: "students" as const };
   const account = { to: "/account", label: "החשבון", icon: "account" as const };
   const more = { to: "#more", label: "עוד", icon: "more" as const };
-  if (role === "admin" || role === "secretary") return [today, students, mark, more];
-  if (role === "homeroom") return [mark, ownClass, today, account];
-  return [mark, today, account];
+  if (role === "admin" || role === "secretary") return [releases, students, mark, more];
+  if (role === "homeroom") return [mark, releases, ownClass, today, account];
+  return [mark, releases, today, account];
 }
 
 function titleFor(pathname: string): string {
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/mine")) return "היום";
+  if (pathname.startsWith("/dashboard")) return "שחרורים";
+  if (pathname.startsWith("/mine")) return "היום";
   if (pathname.startsWith("/search") || pathname.startsWith("/students/")) return "סימון";
   if (pathname.startsWith("/class")) return "הכיתה שלי";
   if (pathname.startsWith("/roster")) return "תלמידים";
@@ -58,7 +61,29 @@ export function Layout() {
   const tabs = phoneTabs(role);
   const [school, setSchool] = useState("נשארים");
   const [moreOpen, setMoreOpen] = useState(false);
+  const [readyCount, setReadyCount] = useState(0);
   const showFab = pathname.startsWith("/roster") || pathname.startsWith("/mine");
+
+  useEffect(() => {
+    let stop = false;
+    const load = async () => {
+      try {
+        const rows = await getApi().listDetentions({ date: jerusalemToday() });
+        const count = rows.filter((row) => row.status === "pending" && new Date(row.releaseAt).getTime() <= Date.now()).length;
+        if (!stop) setReadyCount(count);
+      } catch {
+        if (!stop) setReadyCount(0);
+      }
+    };
+    void load();
+    const unsub = getApi().subscribeDetentions(() => void load());
+    const timer = window.setInterval(() => void load(), 15000);
+    return () => {
+      stop = true;
+      unsub();
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     void getApi()
@@ -95,7 +120,8 @@ export function Layout() {
         <nav>
           {side.map((item) => (
             <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
-              {item.label}
+              <span>{item.label}</span>
+              {item.to === "/dashboard" ? <ReadyBadge count={readyCount} /> : null}
             </NavLink>
           ))}
         </nav>
@@ -131,6 +157,7 @@ export function Layout() {
           ) : (
             <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
               <TabIcon name={item.icon} />
+              {item.to === "/dashboard" ? <ReadyBadge count={readyCount} /> : null}
               <span>{item.label}</span>
             </NavLink>
           ),
@@ -151,8 +178,20 @@ export function Layout() {
   );
 }
 
+function ReadyBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return <span className="nav-badge">{count > 99 ? "99" : count}</span>;
+}
+
 function TabIcon({ name }: { name: NavItem["icon"] }) {
   const common = { width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, "aria-hidden": true as const };
+  if (name === "release") {
+    return (
+      <svg {...common}>
+        <path d="M5 12.5l4 4L19 7" />
+      </svg>
+    );
+  }
   if (name === "today") {
     return (
       <svg {...common}>

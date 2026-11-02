@@ -7,6 +7,7 @@ alter table public.detentions add column if not exists release_at timestamptz;
 alter table public.detentions add column if not exists release_override_by uuid references public.profiles (id);
 alter table public.detentions add column if not exists release_override_at timestamptz;
 alter table public.detentions add column if not exists early_release boolean not null default false;
+alter table public.detentions add column if not exists released_by uuid references public.profiles (id);
 
 update public.detentions
 set release_at = marked_at + make_interval(mins => duration_minutes)
@@ -14,10 +15,26 @@ where release_at is null;
 
 alter table public.detentions alter column release_at set not null;
 
-grant select (release_at, release_override_by, release_override_at)
+grant select (release_at, release_override_by, release_override_at, released_by)
   on public.detentions to authenticated;
 grant insert (release_at) on public.detentions to authenticated;
 grant update (early_release) on public.detentions to authenticated;
+
+-- End-of-day duty rotates, so every signed-in staff role may release.
+-- Phones and WhatsApp stay on can_sign() (secretary and admin only).
+create or replace function public.can_release()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.caller_permitted()
+    and public.my_role() in ('teacher', 'homeroom', 'secretary', 'admin')
+$$;
+
+grant execute on function public.can_release() to authenticated;
+revoke all on function public.can_release() from public, anon;
 
 -- Names and classes for every staff role. Parent phones stay off this table.
 drop policy if exists students_select on public.students;
@@ -82,6 +99,7 @@ begin
   new.cancelled_at := null;
   new.release_override_by := null;
   new.release_override_at := null;
+  new.released_by := null;
   new.early_release := false;
   if new.release_at is null then
     new.release_at := now() + make_interval(mins => new.duration_minutes);
@@ -116,7 +134,7 @@ begin
   end if;
 
   if new.status = 'completed' and old.status = 'pending' then
-    if not public.can_sign() then
+    if not public.can_release() then
       raise exception 'אין הרשאה לאשר סיום';
     end if;
     if now() < old.release_at and not (public.is_admin() and new.early_release) then
@@ -130,6 +148,7 @@ begin
       new.release_override_at := old.release_override_at;
     end if;
     new.early_release := false;
+    new.released_by := auth.uid();
     new.signed_by := auth.uid();
     new.signed_at := now();
     new.completed_at := now();
@@ -145,6 +164,7 @@ begin
     new.signed_by := old.signed_by;
     new.signed_at := old.signed_at;
     new.completed_at := old.completed_at;
+    new.released_by := old.released_by;
     new.release_override_by := old.release_override_by;
     new.release_override_at := old.release_override_at;
   elsif new.status is distinct from old.status then
@@ -156,6 +176,7 @@ begin
     new.completed_at := old.completed_at;
     new.cancelled_by := old.cancelled_by;
     new.cancelled_at := old.cancelled_at;
+    new.released_by := old.released_by;
     new.release_override_by := old.release_override_by;
     new.release_override_at := old.release_override_at;
   end if;
@@ -236,3 +257,15 @@ $$;
 
 grant execute on function public.delete_class(uuid, text) to authenticated;
 revoke all on function public.delete_class(uuid, text) from public, anon;
+
+drop policy if exists detentions_update on public.detentions;
+create policy detentions_update on public.detentions
+  for update to authenticated
+  using (
+    public.can_release()
+    or (marked_by = auth.uid() and status = 'pending')
+  )
+  with check (
+    public.can_release()
+    or (marked_by = auth.uid() and status = 'cancelled')
+  );

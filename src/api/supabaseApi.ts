@@ -93,6 +93,7 @@ interface DetentionRow {
     | null;
   marker: { full_name: string } | { full_name: string }[] | null;
   signer: { full_name: string } | { full_name: string }[] | null;
+  releaser: { full_name: string } | { full_name: string }[] | null;
 }
 
 interface NotificationDbRow {
@@ -112,13 +113,14 @@ interface NotificationDbRow {
 
 const DETENTION_SELECT = `
   id, student_id, reason_id, reason_text, duration_minutes, status, detention_date, release_at,
-  marked_by, marked_at, signed_by, signed_at, notes,
+  marked_by, marked_at, signed_by, signed_at, released_by, notes,
   student:students!detentions_student_id_fkey (
     first_name, last_name, gender, class_id,
     class:classes!students_class_id_fkey ( name )
   ),
   marker:profiles!detentions_marked_by_fkey ( full_name ),
-  signer:profiles!detentions_signed_by_fkey ( full_name )
+  signer:profiles!detentions_signed_by_fkey ( full_name ),
+  releaser:profiles!detentions_released_by_fkey ( full_name )
 `;
 
 function client() {
@@ -181,6 +183,7 @@ function mapDetention(row: DetentionRow): Detention {
   const classRoom = one(student?.class ?? null);
   const marker = one(row.marker);
   const signer = one(row.signer);
+  const releaser = one(row.releaser);
   return {
     id: row.id,
     studentId: row.student_id,
@@ -202,6 +205,7 @@ function mapDetention(row: DetentionRow): Detention {
     className: classRoom?.name ?? "",
     markerName: marker?.full_name ?? "",
     signerName: signer?.full_name ?? null,
+    releaserName: releaser?.full_name ?? signer?.full_name ?? null,
   };
 }
 
