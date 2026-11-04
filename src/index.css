@@ -754,3 +754,24 @@ summary { min-height: 44px; display: flex; align-items: center; cursor: pointer;
 .det-menu-list button { background: none; border: 0; padding: 10px 14px; text-align: start; cursor: pointer; font: inherit; }
 .det-menu-list .danger { color: var(--danger, #b00020); }
 .det-edit { margin-top: 8px; min-width: 220px; }
+
+/* Settings / account polish */
+.choice-row { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.choice-row legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+.choice { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1px solid var(--line, #c9ccd3); border-radius: 10px; cursor: pointer; }
+.choice:has(input:checked) { border-color: currentColor; font-weight: 600; }
+.choice input { width: 20px; height: 20px; margin: 0; }
+.account-page .btn, .closure-row .btn { min-height: 44px; }
+.account-page input[aria-invalid] { border-color: #b42318; }
+.closure-row { list-style: none; }
+ul.list { padding: 0; margin: 0; }
+.more-list a { min-height: 48px; }
+.sidenav .more-button {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 44px; padding: 10px 12px; border-radius: 12px; border: 0;
+  background: transparent; color: var(--ink); font: inherit; font-weight: 500; text-align: start; cursor: pointer;
+}
+.sidenav .more-button:hover, .sidenav .more-button[aria-expanded="true"] { background: var(--primary-soft); }
+.sidenav a:focus-visible, .sidenav .more-button:focus-visible, .tabbar a:focus-visible, .tabbar button:focus-visible, .more-list a:focus-visible {
+  outline: 3px solid var(--primary-dark); outline-offset: 2px;
+}

@@ -8,12 +8,14 @@ import { ApprovalRow } from "./StaffPage";
 import { TodayMarks } from "./MyMarksPage";
 import { Banner, Empty, studentName } from "../components/ui";
 import { classKey, classRank } from "../lib/csv";
+import { jerusalemToday } from "../lib/dates";
 
-const RECENT_KEY = "hishaarut-recent";
+/** Recent students reset every day (the key carries today's date). */
+const recentKey = () => `hishaarut-recent-${jerusalemToday()}`;
 
 function readRecent(): string[] {
   try {
-    const parsed = JSON.parse(sessionStorage.getItem(RECENT_KEY) ?? "[]") as string[];
+    const parsed = JSON.parse(sessionStorage.getItem(recentKey()) ?? "[]") as string[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -22,7 +24,7 @@ function readRecent(): string[] {
 
 export function rememberStudent(id: string) {
   const next = [id, ...readRecent().filter((item) => item !== id)].slice(0, 6);
-  sessionStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  sessionStorage.setItem(recentKey(), JSON.stringify(next));
 }
 
 export function SearchPage() {

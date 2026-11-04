@@ -203,6 +203,7 @@ function mapSettings(row: SettingsRow): SchoolSettings {
     notificationMode: row.notification_mode,
     schedule: scheduleFrom(row),
     closures: [],
+    specialDays: [],
     parentMessageTemplate: row.parent_message_template?.trim() || DEFAULT_PARENT_TEMPLATE,
     whatsappPhoneNumberId: row.whatsapp_phone_number_id,
     whatsappDisplayNumber: row.whatsapp_display_number,
@@ -414,12 +415,20 @@ export const supabaseApi: AppApi = {
       )
       .eq("id", 1)
       .single();
-    const closuresQuery = client().from("school_closures").select("closure_date").order("closure_date");
+    const closuresQuery = client().from("school_closures").select("closure_date, start_clock, end_clock").order("closure_date");
     const [{ data, error }, closures] = await Promise.all([settingsQuery, closuresQuery]);
     if (error) throw asError(error);
     if (closures.error) throw asError(closures.error);
     const settings = mapSettings(data as SettingsRow);
-    settings.closures = (closures.data ?? []).map((row) => String((row as { closure_date: string }).closure_date).slice(0, 10));
+    const dayRows = (closures.data ?? []) as Array<{ closure_date: string; start_clock: string | null; end_clock: string | null }>;
+    settings.closures = dayRows.filter((row) => !row.end_clock).map((row) => String(row.closure_date).slice(0, 10));
+    settings.specialDays = dayRows
+      .filter((row) => row.end_clock)
+      .map((row) => ({
+        date: String(row.closure_date).slice(0, 10),
+        start: row.start_clock ? row.start_clock.slice(0, 5) : null,
+        end: String(row.end_clock).slice(0, 5),
+      }));
     return settings;
   },
 
@@ -475,6 +484,13 @@ export const supabaseApi: AppApi = {
 
   async addClosure(date) {
     const { error } = await client().from("school_closures").insert({ closure_date: date });
+    if (error) throw asError(error);
+  },
+
+  async setSpecialDay(date, start, end) {
+    const { error } = await client()
+      .from("school_closures")
+      .upsert({ closure_date: date, start_clock: end ? start : null, end_clock: end }, { onConflict: "closure_date" });
     if (error) throw asError(error);
   },
 

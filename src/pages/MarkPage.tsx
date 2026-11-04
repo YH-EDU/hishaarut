@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getApi } from "../api";
-import type { Detention, Reason, Student, WeekSchedule } from "../api/types";
-import { DAY_KEYS, DEFAULT_WEEK } from "../api/types";
+import type { Detention, Reason, SpecialDay, Student, WeekSchedule } from "../api/types";
+import { DAY_KEYS, DEFAULT_WEEK, hoursForDate } from "../api/types";
 import { useAuth } from "../auth";
 import { Banner, Button, Field, studentName } from "../components/ui";
 import {
@@ -38,6 +38,7 @@ export function MarkPage() {
   const [notes, setNotes] = useState("");
   const [schedule, setSchedule] = useState<WeekSchedule>(DEFAULT_WEEK);
   const [closures, setClosures] = useState<string[]>([]);
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   const [releaseTime, setReleaseTime] = useState("16:30");
   const [releaseEdited, setReleaseEdited] = useState(false);
   const [now, setNow] = useState(() => new Date());
@@ -61,6 +62,7 @@ export function MarkPage() {
         ]);
         setSchedule(settings.schedule);
         setClosures(settings.closures);
+        setSpecialDays(settings.specialDays ?? []);
         const found = students.find((item) => item.id === id) ?? null;
         const room = classes.find((item) => item.id === found?.classId);
         setStudent(found);
@@ -77,13 +79,13 @@ export function MarkPage() {
   }, [id]);
 
   const duration = customMinutes ? Number(customMinutes) : minutes;
-  const todayHours = schedule[DAY_KEYS[jerusalemDow(now)]];
+  const todayHours = hoursForDate({ schedule, closures, specialDays }, jerusalemToday(now), jerusalemDow(now)) ?? { start: null, end: null };
   const displayHours = todayHours.start && todayHours.end
     ? { start: clockOf(todayHours.start), end: clockOf(todayHours.end) }
     : (DAY_KEYS.map((key) => schedule[key]).find((day) => day.start && day.end) ?? { start: "07:00", end: "16:00" });
   const shownStart = clockOf(displayHours.start ?? "07:00");
   const shownEnd = clockOf(displayHours.end ?? "16:00");
-  const holiday = closures.includes(jerusalemToday(now));
+  const holiday = !todayHours.end;
   const markingOpen = !holiday && withinSchoolHours(todayHours.start, todayHours.end, now);
   const schoolEnd = markingOpen ? clockOf(todayHours.end ?? "") : null;
   const releaseMax = schoolEnd ? addClock(schoolEnd, RELEASE_CAP_MINUTES) : shownEnd;
