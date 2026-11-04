@@ -538,6 +538,13 @@ export const supabaseApi: AppApi = {
     return ((data ?? []) as StudentRow[]).map(mapStudent);
   },
 
+  async getDetentionParentPhones(detentionId: string) {
+    const { data, error } = await client().rpc("get_detention_parent_phones", { p_detention_id: detentionId });
+    if (error) throw asError(error);
+    const row = ((data ?? []) as { mother_phone: string | null; father_phone: string | null }[])[0];
+    return { motherPhone: row?.mother_phone ?? null, fatherPhone: row?.father_phone ?? null };
+  },
+
   async listContacts() {
     const { data, error } = await client().rpc("list_student_contacts");
     if (error) throw asError(error);

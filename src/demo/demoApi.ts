@@ -569,6 +569,22 @@ export const demoApi: AppApi = {
     return state.students.map((student) => ({ ...student }));
   },
 
+  async getDetentionParentPhones(detentionId: string) {
+    const profile = requireUser();
+    const detention = state.detentions.find((item) => item.id === detentionId);
+    if (!detention || detention.status === "cancelled") return { motherPhone: null, fatherPhone: null };
+    const student = state.students.find((item) => item.id === detention.studentId);
+    const allowed = detention.markedBy === profile.id || (student ? canViewContact(profile, student.classId) : false);
+    const c = state.contacts[detention.studentId];
+    if (!allowed || !c) return { motherPhone: null, fatherPhone: null };
+    const pick = (a: string | null, aOff: boolean, b: string | null, bOff: boolean) =>
+      (a && !aOff ? a : null) ?? (b && !bOff ? b : null);
+    return {
+      motherPhone: pick(c.parent2Phone, c.parent2PhoneNoWhatsapp, c.parent2Phone2, c.parent2Phone2NoWhatsapp),
+      fatherPhone: pick(c.parentPhone, c.parentPhoneNoWhatsapp, c.parentPhone2, c.parentPhone2NoWhatsapp),
+    };
+  },
+
   async listContacts() {
     const profile = requireUser();
     return state.students

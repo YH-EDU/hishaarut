@@ -51,11 +51,10 @@ export const DEFAULT_WEEK: WeekSchedule = {
   sat: { start: null, end: null },
 };
 
-export const DEFAULT_PARENT_TEMPLATE = `שלום {parent_name},
-רצינו לעדכן שבנך {student_name} מכיתה {class} יישאר היום בבית הספר לאחר סיום הלימודים, עד השעה {release_time}.
-סיבה: {reason}
-לשאלות אפשר לפנות למזכירות.
-בברכה, צוות הישיבה`;
+export const DEFAULT_PARENT_TEMPLATE = `שלום, עדכון מהישיבה:
+{student_name} נשאר היום בישיבה לאחר סיום הלימודים.
+שעת היציאה המשוערת: {release_time}.
+תודה.`;
 
 export interface SchoolSettings {
   schoolName: string;
@@ -221,6 +220,7 @@ export interface AppApi {
   deleteClass(id: string, confirmName?: string): Promise<void>;
   listStudents(): Promise<Student[]>;
   listContacts(): Promise<StudentContact[]>;
+  getDetentionParentPhones(detentionId: string): Promise<{ motherPhone: string | null; fatherPhone: string | null }>;
   saveStudent(input: StudentInput): Promise<void>;
   setWhatsappOptOut(studentId: string, slot: WhatsappSlot, noWhatsapp: boolean): Promise<void>;
   countDetentions(studentIds: string[]): Promise<number>;

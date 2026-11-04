@@ -30,27 +30,17 @@ describe("school hours", () => {
 });
 
 describe("parent template", () => {
-  it("addresses each parent and falls back to שלום", () => {
-    const father = applyParentTemplate(DEFAULT_PARENT_TEMPLATE, {
-      parentName: "דוד כהן",
+  it("is short, without parent name, with student and release time", () => {
+    const body = applyParentTemplate(DEFAULT_PARENT_TEMPLATE, {
+      parentName: null,
       studentName: "יוסף לוי",
       className: "ז׳1",
       releaseTime: "16:30",
       reason: "הפרעה בשיעור",
     });
-    const unnamed = applyParentTemplate(DEFAULT_PARENT_TEMPLATE, {
-      parentName: "  ",
-      studentName: "יוסף לוי",
-      className: "ז׳1",
-      releaseTime: "16:30",
-      reason: "הפרעה בשיעור",
-    });
-    expect(father.startsWith("שלום דוד כהן,")).toBe(true);
-    expect(father).toContain("בנך יוסף לוי מכיתה ז׳1");
-    expect(father).toContain("עד השעה 16:30");
-    expect(father).toContain("סיבה: הפרעה בשיעור");
-    expect(unnamed.startsWith("שלום,")).toBe(true);
-    expect(unnamed.startsWith("שלום שלום")).toBe(false);
-    expect(father).not.toBe(unnamed);
+    expect(body).toBe("שלום, עדכון מהישיבה:\nיוסף לוי נשאר היום בישיבה לאחר סיום הלימודים.\nשעת היציאה המשוערת: 16:30.\nתודה.");
+  });
+  it("keeps older named templates working", () => {
+    expect(applyParentTemplate("שלום {parent_name}, {student_name}", { parentName: "", studentName: "א", className: "", releaseTime: "", reason: "" })).toBe("שלום, א");
   });
 });

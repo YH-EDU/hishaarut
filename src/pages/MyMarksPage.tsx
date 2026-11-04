@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { getApi } from "../api";
 import type { Detention } from "../api/types";
 import { useAuth } from "../auth";
 import { PageHeader } from "../components/PageHeader";
+import { ParentWhatsApp } from "../components/ParentWhatsApp";
 import { Banner, Button, Empty, Ltr, StatusPill, studentName } from "../components/ui";
 import { formatTime, jerusalemToday } from "../lib/dates";
 
@@ -10,6 +12,7 @@ export function MyMarksPage() {
   const { session } = useAuth();
   const [rows, setRows] = useState<Detention[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const flash = (useLocation().state as { flash?: string } | null)?.flash ?? null;
 
   async function load() {
     if (!session) return;
@@ -33,7 +36,8 @@ export function MyMarksPage() {
 
   return (
     <div className="stack">
-      <PageHeader title="היום" lede="ההשארות שסימנתם היום. אפשר לבטל סימון שעוד לא אושר." />
+      <PageHeader title="היום" lede="ההשארות שסימנתם היום. מכאן שולחים עדכון להורים בוואטסאפ, ואפשר לבטל סימון שעוד לא אושר." />
+      {flash ? <Banner>{flash}</Banner> : null}
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {rows.length === 0 ? <Empty>עוד לא סימנתם השארות היום.</Empty> : null}
       {rows.map((row) => (
@@ -51,6 +55,15 @@ export function MyMarksPage() {
           <span>
             {row.className} · {row.reasonText} · {row.durationMinutes} דק׳
           </span>
+          {row.status === "pending" ? (
+            <ParentWhatsApp
+              detentionId={row.id}
+              studentName={studentName(row.studentFirstName, row.studentLastName)}
+              className={row.className}
+              releaseTime={formatTime(row.releaseAt)}
+              reason={row.reasonText}
+            />
+          ) : null}
           {row.status === "pending" ? (
             <Button variant="danger" onClick={() => void cancel(row.id)}>
               ביטול הסימון
