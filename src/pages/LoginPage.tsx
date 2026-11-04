@@ -77,13 +77,13 @@ export function DeniedPage() {
 export function PendingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [choice, setChoice] = useState<"teacher" | "homeroom">("teacher");
+  const [choice, setChoice] = useState<Role>("teacher");
   const { session } = useAuth();
   const [classIds, setClassIds] = useState<string[]>([]);
   const [classes, setClasses] = useState<Array<{ id: string; name: string; hasHomeroom?: boolean }>>([]);
   const [fullName, setFullName] = useState(session?.profile.fullName ?? "");
   const [title, setTitle] = useState(session?.profile.title ?? "");
-  const [requested, setRequested] = useState<"teacher" | "homeroom" | null>(null);
+  const [requested, setRequested] = useState<Role | null>(null);
   const [requestedNames, setRequestedNames] = useState<string[]>([]);
 
   useEffect(() => {
@@ -91,7 +91,7 @@ export function PendingPage() {
       .then(([rooms, profiles]) => {
         setClasses(rooms);
         const mine = profiles[0];
-        if (mine?.requestedRole === "teacher" || mine?.requestedRole === "homeroom") {
+        if (mine?.requestedRole) {
           setRequested(mine.requestedRole);
           setRequestedNames(rooms.filter((room) => mine.requestedClassIds.includes(room.id)).map((room) => room.name));
         }
@@ -120,7 +120,7 @@ export function PendingPage() {
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {requested ? (
         <p>
-          הבקשה נשלחה: {requested === "homeroom" ? "מחנך" : "מורה מקצועי"}
+          הבקשה נשלחה: {ROLE_LABEL[requested]}
           {requestedNames.length > 0 ? ` · ${requestedNames.join(", ")}` : ""}. מנהל או מזכירות צריכים לאשר לפני שיש גישה.
         </p>
       ) : (
@@ -134,12 +134,11 @@ export function PendingPage() {
             <TitlePicker value={title} onChange={setTitle} />
           </Field>
           <div className="row">
-            <Button variant={choice === "teacher" ? "primary" : "ghost"} onClick={() => setChoice("teacher")}>
-              מורה מקצועי
-            </Button>
-            <Button variant={choice === "homeroom" ? "primary" : "ghost"} onClick={() => setChoice("homeroom")}>
-              מחנך
-            </Button>
+            {(["teacher", "homeroom", "admin", "secretary"] as Role[]).map((role) => (
+              <Button key={role} variant={choice === role ? "primary" : "ghost"} onClick={() => setChoice(role)}>
+                {role === "homeroom" ? "מחנך" : role === "admin" ? "מנהל" : ROLE_LABEL[role]}
+              </Button>
+            ))}
           </div>
           {choice === "homeroom" ? (
             <div className="stack">

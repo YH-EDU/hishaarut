@@ -233,7 +233,7 @@ export interface AppApi {
   listProfiles(): Promise<Profile[]>;
   setUserRole(userId: string, role: Role | null): Promise<void>;
   listOpenClasses(): Promise<Array<{ id: string; name: string; hasHomeroom?: boolean }>>;
-  requestStaffRole(role: "teacher" | "homeroom", classIds: string[]): Promise<void>;
+  requestStaffRole(role: Role, classIds: string[]): Promise<void>;
   approveStaffRequest(userId: string, role: Role, classIds: string[]): Promise<void>;
   rejectStaffRequest(userId: string): Promise<void>;
   transferOwnership(userId: string): Promise<void>;

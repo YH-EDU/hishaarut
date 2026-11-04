@@ -390,7 +390,10 @@ export function ApprovalRow({
   onError: (message: string | null) => void;
   onInfo: (message: string | null) => void;
 }) {
-  const homeroom = profile.requestedRole === "homeroom";
+  const { session } = useAuth();
+  const approverIsAdmin = session?.profile.role === "admin";
+  const [role, setRole] = useState<Role>(profile.requestedRole as Role);
+  const homeroom = role === "homeroom";
   const [classId, setClassId] = useState(profile.requestedClassIds[0] ?? "");
   const room = classes.find((item) => item.id === classId);
   const claimed = classes.filter((item) => profile.requestedClassIds.includes(item.id)).map((item) => item.name);
@@ -403,11 +406,24 @@ export function ApprovalRow({
         <br />
         <span>
           מבקש: {profile.requestedRole ? ROLE_LABEL[profile.requestedRole] : ""}
-          {homeroom ? <> · כיתה שנבחרה: <b>{claimed.join(", ") || "לא נבחרה"}</b></> : null}
+          {profile.requestedRole === "homeroom" ? <> · כיתה שנבחרה: <b>{claimed.join(", ") || "לא נבחרה"}</b></> : null}
         </span>
       </div>
       {missingName || !profile.title ? (
         <Banner tone="warn">חסר {missingName ? "שם פרטי ומשפחה" : "תואר"}. אפשר להשלים בכרטיס איש הצוות אחרי האישור.</Banner>
+      ) : null}
+      <Field label="תפקיד לאישור">
+        <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
+          {(["teacher", "homeroom", "secretary", "admin"] as Role[]).map((item) => (
+            <option key={item} value={item} disabled={item === "admin" && !approverIsAdmin}>
+              {ROLE_LABEL[item]}
+              {item === "admin" && !approverIsAdmin ? " (רק מנהל יכול לאשר)" : ""}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {role === "admin" || role === "secretary" ? (
+        <Banner tone="warn">שימו לב: {ROLE_LABEL[role]} רואה את כל הנתונים במערכת{role === "admin" ? " ויכול למנות מנהלים" : " ויכולה לאשר משתמשים"}.</Banner>
       ) : null}
       {homeroom ? (
         <Field label="כיתת חינוך לאישור">
@@ -425,10 +441,10 @@ export function ApprovalRow({
       {taken ? <Banner tone="warn">לכיתה {room?.name} כבר רשום מחנך. אישור יחליף אותו במחנך החדש.</Banner> : null}
       <span className="row">
         <Button
-          disabled={homeroom && !classId}
+          disabled={(homeroom && !classId) || (role === "admin" && !approverIsAdmin)}
           onClick={() =>
             void getApi()
-              .approveStaffRequest(profile.id, profile.requestedRole as Role, homeroom ? [classId] : [])
+              .approveStaffRequest(profile.id, role, homeroom ? [classId] : [])
               .then(async () => {
                 onInfo("הבקשה אושרה");
                 await onChanged();

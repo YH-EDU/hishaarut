@@ -781,7 +781,7 @@ export const demoApi: AppApi = {
   async requestStaffRole(role, classIds) {
     const profile = requireUser();
     if (profile.role) throw new Error("כבר יש תפקיד לחשבון");
-    if (role !== "teacher" && role !== "homeroom") throw new Error("אפשר לבקש רק מורה מקצועי או מחנך");
+    if (!["teacher", "homeroom", "secretary", "admin"].includes(role)) throw new Error("תפקיד לא תקין");
     if (role === "homeroom" && classIds.length === 0) throw new Error("מחנך בוחר כיתה קיימת");
     profile.requestedRole = role;
     profile.requestedClassIds = role === "homeroom" ? classIds : [];
@@ -792,6 +792,7 @@ export const demoApi: AppApi = {
   async approveStaffRequest(userId, role, classIds) {
     const profile = requireUser();
     if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל או מזכירות יכולים לאשר תפקיד");
+    if (role === "admin" && profile.role !== "admin") throw new Error("מזכירות לא יכולה למנות או לשנות מנהל");
     await this.setUserRole(userId, role);
     const target = state.profiles.find((item) => item.id === userId);
     if (!target) return;
