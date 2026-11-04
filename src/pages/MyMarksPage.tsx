@@ -62,6 +62,7 @@ export function MyMarksPage() {
               className={row.className}
               releaseTime={formatTime(row.releaseAt)}
               reason={row.reasonText}
+              teacherName={session?.profile.fullName ?? row.markerName}
             />
           ) : null}
           {row.status === "pending" ? (

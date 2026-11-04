@@ -343,6 +343,8 @@ function ScheduleForm({
           <li><bdi className="ltr">{"{student_name}"}</bdi> שם התלמיד</li>
           <li><bdi className="ltr">{"{class}"}</bdi> כיתה</li>
           <li><bdi className="ltr">{"{release_time}"}</bdi> שעת יציאה</li>
+          <li><bdi className="ltr">{"{reason_clause}"}</bdi> שם התלמיד והסיבה במשפט</li>
+          <li><bdi className="ltr">{"{teacher_sign}"}</bdi> חתימת המורה</li>
           <li><bdi className="ltr">{"{reason}"}</bdi> סיבה</li>
         </ul>
         <Field label="נוסח">

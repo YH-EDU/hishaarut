@@ -2,7 +2,8 @@
 -- 1) get_detention_parent_phones: returns mother/father phones for a detention
 --    only to the teacher who marked it (same day, not cancelled), or to staff
 --    who can already view the student's contacts.
--- 2) The parent template becomes short, without the parent's name.
+-- 2) The parent template comes from the teacher: reason as a sentence, exact
+--    release time, no parent name. {reason_clause} and {teacher_sign} are new.
 -- Safe to paste again in the Supabase SQL editor.
 
 create or replace function public.get_detention_parent_phones(p_detention_id uuid)
@@ -36,12 +37,84 @@ returns text
 language sql
 immutable
 as $$
-  select E'שלום, עדכון מהישיבה:\n{student_name} נשאר היום בישיבה לאחר סיום הלימודים.\nשעת היציאה המשוערת: {release_time}.\nתודה.'
+  select E'שלום,\nהריני לעדכן ש{reason_clause} עד השעה {release_time}.\nתודה{teacher_sign}'
 $$;
+
+-- Mirror of reasonClause in src/lib/messages.ts.
+create or replace function public.parent_reason_clause(p_student_name text, p_reason text)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  r text := regexp_replace(btrim(coalesce(p_reason, '')), '[.\s]+$', '');
+  phrase text;
+  who text := coalesce(p_student_name, '');
+begin
+  phrase := case r
+    when 'חיסור בתפילה' then 'חיסר בתפילה'
+    when 'חיסור מתפילה' then 'חיסר בתפילה'
+    when 'הפרעה בשיעור' then 'הפריע בשיעור'
+    when 'היעדרות משיעור' then 'נעדר משיעור'
+    when 'היעדרות מהשיעור' then 'נעדר מהשיעור'
+    when 'חיסור משיעור' then 'נעדר משיעור'
+    when 'איחור' then 'איחר'
+    when 'איחור לשיעור' then 'איחר לשיעור'
+    when 'אי-הכנת שיעורי בית' then 'לא הכין שיעורי בית'
+    when 'אי הכנת שיעורי בית' then 'לא הכין שיעורי בית'
+    when 'אי הגשת עבודה' then 'לא הגיש עבודה'
+    when 'אי-הגשת עבודה' then 'לא הגיש עבודה'
+    else null end;
+  if phrase is not null then
+    return who || ' ' || phrase || ', ולכן יישאר היום בסוף היום';
+  elsif r <> '' then
+    return who || ' יישאר היום בסוף היום בשל ' || r;
+  end if;
+  return who || ' יישאר היום בסוף היום';
+end;
+$$;
+
+create or replace function public.apply_parent_template(
+  p_template text,
+  p_parent_name text,
+  p_student_name text,
+  p_class_name text,
+  p_release_time text,
+  p_reason text
+)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  body text;
+  name text;
+begin
+  body := coalesce(nullif(btrim(coalesce(p_template, '')), ''), public.default_parent_message_template());
+  name := nullif(btrim(coalesce(p_parent_name, '')), '');
+  if name is null then
+    body := replace(body, 'שלום {parent_name}', 'שלום');
+    body := replace(body, '{parent_name}', 'שלום');
+  else
+    body := replace(body, '{parent_name}', name);
+  end if;
+  body := replace(body, '{reason_clause}', public.parent_reason_clause(p_student_name, p_reason));
+  body := replace(body, '{teacher_sign}', '.');
+  body := replace(body, '{student_name}', coalesce(p_student_name, ''));
+  body := replace(body, '{class}', coalesce(p_class_name, ''));
+  body := replace(body, '{release_time}', coalesce(p_release_time, ''));
+  body := replace(body, '{reason}', coalesce(p_reason, ''));
+  return body;
+end;
+$$;
+
+revoke all on function public.apply_parent_template(text, text, text, text, text, text) from public, anon;
+grant execute on function public.apply_parent_template(text, text, text, text, text, text) to authenticated;
 
 update public.school_settings
 set parent_message_template = public.default_parent_message_template()
 where id = 1
   and (parent_message_template is null
        or btrim(parent_message_template) = ''
-       or parent_message_template like 'שלום {parent_name},%רצינו לעדכן שבנך%');
+       or parent_message_template like 'שלום {parent_name},%רצינו לעדכן שבנך%'
+       or parent_message_template like 'שלום, עדכון מהישיבה:%');

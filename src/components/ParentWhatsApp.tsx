@@ -13,6 +13,7 @@ export function ParentWhatsApp({
   releaseTime,
   reason,
   template,
+  teacherName,
 }: {
   detentionId: string;
   studentName: string;
@@ -20,6 +21,7 @@ export function ParentWhatsApp({
   releaseTime: string;
   reason: string;
   template?: string | null;
+  teacherName?: string | null;
 }) {
   const [phones, setPhones] = useState<{ motherPhone: string | null; fatherPhone: string | null } | null>(null);
   const [who, setWho] = useState<Who>("mother");
@@ -44,7 +46,7 @@ export function ParentWhatsApp({
     return <p className="muted parent-wa">אין טלפון הורה עם וואטסאפ. אפשר לעדכן את המזכירות.</p>;
   }
   const phone = who === "mother" ? phones.motherPhone : phones.fatherPhone;
-  const message = applyParentTemplate(template, { parentName: null, studentName, className, releaseTime, reason });
+  const message = applyParentTemplate(template, { parentName: null, studentName, className, releaseTime, reason, teacherName });
   return (
     <div className="parent-wa">
       <span className="muted">עדכון להורים:</span>

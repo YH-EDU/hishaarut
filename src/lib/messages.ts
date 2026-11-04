@@ -6,6 +6,32 @@ export interface ParentTemplateValues {
   className: string;
   releaseTime: string;
   reason: string;
+  teacherName?: string | null;
+}
+
+/** Preset reasons (nouns in the list) turned into a past-tense verb about the student. */
+const REASON_PHRASES: Record<string, string> = {
+  "חיסור בתפילה": "חיסר בתפילה",
+  "חיסור מתפילה": "חיסר בתפילה",
+  "הפרעה בשיעור": "הפריע בשיעור",
+  "היעדרות משיעור": "נעדר משיעור",
+  "היעדרות מהשיעור": "נעדר מהשיעור",
+  "חיסור משיעור": "נעדר משיעור",
+  "איחור": "איחר",
+  "איחור לשיעור": "איחר לשיעור",
+  "אי-הכנת שיעורי בית": "לא הכין שיעורי בית",
+  "אי הכנת שיעורי בית": "לא הכין שיעורי בית",
+  "אי הגשת עבודה": "לא הגיש עבודה",
+  "אי-הגשת עבודה": "לא הגיש עבודה",
+};
+
+/** "{student} נעדר משיעור, ולכן יישאר היום בסוף היום" or a "בשל {reason}" fallback for free text. */
+export function reasonClause(studentName: string, reason: string | null | undefined): string {
+  const text = (reason ?? "").trim().replace(/[.\s]+$/, "");
+  const phrase = REASON_PHRASES[text];
+  if (phrase) return `${studentName} ${phrase}, ולכן יישאר היום בסוף היום`;
+  if (text) return `${studentName} יישאר היום בסוף היום בשל ${text}`;
+  return `${studentName} יישאר היום בסוף היום`;
 }
 
 /** Fills the parent WhatsApp template. A missing name becomes the greeting שלום, without doubling it. */
@@ -19,7 +45,10 @@ export function applyParentTemplate(template: string | null | undefined, values:
   } else {
     body = body.replaceAll("{parent_name}", name);
   }
+  const teacher = values.teacherName?.trim() ?? "";
   return body
+    .replaceAll("{reason_clause}", reasonClause(values.studentName, values.reason))
+    .replaceAll("{teacher_sign}", teacher ? `, ${teacher}` : ".")
     .replaceAll("{student_name}", values.studentName)
     .replaceAll("{class}", values.className)
     .replaceAll("{release_time}", values.releaseTime)

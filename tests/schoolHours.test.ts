@@ -30,17 +30,23 @@ describe("school hours", () => {
 });
 
 describe("parent template", () => {
-  it("is short, without parent name, with student and release time", () => {
-    const body = applyParentTemplate(DEFAULT_PARENT_TEMPLATE, {
-      parentName: null,
-      studentName: "יוסף לוי",
-      className: "ז׳1",
-      releaseTime: "16:30",
-      reason: "הפרעה בשיעור",
-    });
-    expect(body).toBe("שלום, עדכון מהישיבה:\nיוסף לוי נשאר היום בישיבה לאחר סיום הלימודים.\nשעת היציאה המשוערת: 16:30.\nתודה.");
+  const base = { parentName: null, studentName: "יוסף לוי", className: "ז׳1", releaseTime: "16:30" };
+  it("turns preset reasons into a sentence and signs with the teacher", () => {
+    expect(applyParentTemplate(DEFAULT_PARENT_TEMPLATE, { ...base, reason: "היעדרות משיעור", teacherName: "הרב כהן" })).toBe(
+      "שלום,\nהריני לעדכן שיוסף לוי נעדר משיעור, ולכן יישאר היום בסוף היום עד השעה 16:30.\nתודה, הרב כהן",
+    );
+  });
+  it("uses בשל for free text and drops a missing signature", () => {
+    expect(applyParentTemplate(DEFAULT_PARENT_TEMPLATE, { ...base, reason: "שימוש בטלפון", teacherName: " " })).toBe(
+      "שלום,\nהריני לעדכן שיוסף לוי יישאר היום בסוף היום בשל שימוש בטלפון עד השעה 16:30.\nתודה.",
+    );
+  });
+  it("handles a missing reason", () => {
+    expect(applyParentTemplate(DEFAULT_PARENT_TEMPLATE, { ...base, reason: "" })).toBe(
+      "שלום,\nהריני לעדכן שיוסף לוי יישאר היום בסוף היום עד השעה 16:30.\nתודה.",
+    );
   });
   it("keeps older named templates working", () => {
-    expect(applyParentTemplate("שלום {parent_name}, {student_name}", { parentName: "", studentName: "א", className: "", releaseTime: "", reason: "" })).toBe("שלום, א");
+    expect(applyParentTemplate("שלום {parent_name}, {student_name}", { ...base, parentName: "", studentName: "א", reason: "" })).toBe("שלום, א");
   });
 });

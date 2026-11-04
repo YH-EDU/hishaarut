@@ -51,10 +51,9 @@ export const DEFAULT_WEEK: WeekSchedule = {
   sat: { start: null, end: null },
 };
 
-export const DEFAULT_PARENT_TEMPLATE = `שלום, עדכון מהישיבה:
-{student_name} נשאר היום בישיבה לאחר סיום הלימודים.
-שעת היציאה המשוערת: {release_time}.
-תודה.`;
+export const DEFAULT_PARENT_TEMPLATE = `שלום,
+הריני לעדכן ש{reason_clause} עד השעה {release_time}.
+תודה{teacher_sign}`;
 
 export interface SchoolSettings {
   schoolName: string;
