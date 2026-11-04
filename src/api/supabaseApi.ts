@@ -775,6 +775,26 @@ export const supabaseApi: AppApi = {
     requireRows(data as { id: string }[] | null, error);
   },
 
+  async editDetention(id, patch) {
+    const { error } = await client().rpc("edit_detention", {
+      p_id: id,
+      p_reason_id: patch.reasonId,
+      p_reason_text: patch.reasonText,
+      p_release_at: patch.releaseAt,
+    });
+    if (error) throw asError(error);
+  },
+
+  async deleteDetention(id) {
+    const { error } = await client().rpc("delete_detention", { p_id: id });
+    if (error) throw asError(error);
+  },
+
+  async setMyTeaching(role, classId) {
+    const { error } = await client().rpc("set_my_teaching", { p_role: role, p_class_id: classId });
+    if (error) throw asError(error);
+  },
+
   async listNotifications(detentionIds) {
     if (detentionIds.length === 0) return [];
     const { data, error } = await client()

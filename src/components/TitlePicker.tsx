@@ -8,7 +8,7 @@ export function TitlePicker({ value, onChange }: { value: string; onChange: (val
     <div className="stack">
       <div className="chips">
         <button type="button" className="chip" aria-pressed={value === ""} onClick={() => onChange("")}>
-          בלי תואר
+          ללא תואר
         </button>
         {TITLE_OPTIONS.map((option) => (
           <button key={option} type="button" className="chip" aria-pressed={value === option} onClick={() => onChange(option)}>
