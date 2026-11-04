@@ -33,17 +33,17 @@ describe("parent template", () => {
   const base = { parentName: null, studentName: "יוסף לוי", className: "ז׳1", releaseTime: "16:30" };
   it("turns preset reasons into a sentence and signs with the teacher", () => {
     expect(applyParentTemplate(DEFAULT_PARENT_TEMPLATE, { ...base, reason: "היעדרות משיעור", teacherName: "הרב כהן" })).toBe(
-      "שלום,\nהריני לעדכן שיוסף לוי נעדר משיעור, ולכן יישאר היום בסוף היום עד השעה 16:30.\nתודה, הרב כהן",
+      "שלום,\nהריני לעדכן שיוסף לוי נעדר משיעור, ולכן יישאר בסוף היום להשלמת עבודה עד השעה 16:30.\nתודה, הרב כהן",
     );
   });
   it("uses בשל for free text and drops a missing signature", () => {
     expect(applyParentTemplate(DEFAULT_PARENT_TEMPLATE, { ...base, reason: "שימוש בטלפון", teacherName: " " })).toBe(
-      "שלום,\nהריני לעדכן שיוסף לוי יישאר היום בסוף היום בשל שימוש בטלפון עד השעה 16:30.\nתודה.",
+      "שלום,\nהריני לעדכן שיוסף לוי יישאר בסוף היום להשלמת עבודה בשל שימוש בטלפון עד השעה 16:30.\nתודה.",
     );
   });
   it("handles a missing reason", () => {
     expect(applyParentTemplate(DEFAULT_PARENT_TEMPLATE, { ...base, reason: "" })).toBe(
-      "שלום,\nהריני לעדכן שיוסף לוי יישאר היום בסוף היום עד השעה 16:30.\nתודה.",
+      "שלום,\nהריני לעדכן שיוסף לוי יישאר בסוף היום להשלמת עבודה עד השעה 16:30.\nתודה.",
     );
   });
   it("keeps older named templates working", () => {

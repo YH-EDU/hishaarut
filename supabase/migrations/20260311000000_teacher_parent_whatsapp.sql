@@ -66,11 +66,11 @@ begin
     when 'אי-הגשת עבודה' then 'לא הגיש עבודה'
     else null end;
   if phrase is not null then
-    return who || ' ' || phrase || ', ולכן יישאר היום בסוף היום';
+    return who || ' ' || phrase || ', ולכן יישאר בסוף היום להשלמת עבודה';
   elsif r <> '' then
-    return who || ' יישאר היום בסוף היום בשל ' || r;
+    return who || ' יישאר בסוף היום להשלמת עבודה בשל ' || r;
   end if;
-  return who || ' יישאר היום בסוף היום';
+  return who || ' יישאר בסוף היום להשלמת עבודה';
 end;
 $$;
 
@@ -117,4 +117,5 @@ where id = 1
   and (parent_message_template is null
        or btrim(parent_message_template) = ''
        or parent_message_template like 'שלום {parent_name},%רצינו לעדכן שבנך%'
-       or parent_message_template like 'שלום, עדכון מהישיבה:%');
+       or parent_message_template like 'שלום, עדכון מהישיבה:%'
+       or parent_message_template like 'שלום,%הריני לעדכן ש{reason_clause}%');

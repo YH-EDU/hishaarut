@@ -25,13 +25,13 @@ const REASON_PHRASES: Record<string, string> = {
   "אי-הגשת עבודה": "לא הגיש עבודה",
 };
 
-/** "{student} נעדר משיעור, ולכן יישאר היום בסוף היום" or a "בשל {reason}" fallback for free text. */
+/** "{student} נעדר משיעור, ולכן יישאר בסוף היום להשלמת עבודה" or a "בשל {reason}" fallback for free text. */
 export function reasonClause(studentName: string, reason: string | null | undefined): string {
   const text = (reason ?? "").trim().replace(/[.\s]+$/, "");
   const phrase = REASON_PHRASES[text];
-  if (phrase) return `${studentName} ${phrase}, ולכן יישאר היום בסוף היום`;
-  if (text) return `${studentName} יישאר היום בסוף היום בשל ${text}`;
-  return `${studentName} יישאר היום בסוף היום`;
+  if (phrase) return `${studentName} ${phrase}, ולכן יישאר בסוף היום להשלמת עבודה`;
+  if (text) return `${studentName} יישאר בסוף היום להשלמת עבודה בשל ${text}`;
+  return `${studentName} יישאר בסוף היום להשלמת עבודה`;
 }
 
 /** Fills the parent WhatsApp template. A missing name becomes the greeting שלום, without doubling it. */
