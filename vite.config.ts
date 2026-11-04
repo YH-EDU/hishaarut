@@ -51,6 +51,8 @@ export default defineConfig(({ mode }) => {
         // drops the old precache and picks up the launcher art.
         cacheId: "hishaarut-v3",
         cleanupOutdatedCaches: true,
+        // Phone notifications (push + click) live in public/push-sw.js.
+        importScripts: ["push-sw.js"],
       },
     }),
     {

@@ -1,5 +1,5 @@
 export type Role = "teacher" | "homeroom" | "secretary" | "admin";
-export type DetentionStatus = "pending" | "completed" | "cancelled";
+export type DetentionStatus = "pending" | "completed" | "cancelled" | "no_show";
 export type Gender = "male" | "female";
 export type NotificationMode = "manual_link" | "cloud_api";
 export type NotificationEvent = "marked" | "completed";
@@ -266,6 +266,14 @@ export interface AppApi {
   createDetention(input: DetentionInput): Promise<string>;
   completeDetention(id: string, early?: boolean): Promise<void>;
   cancelDetention(id: string): Promise<void>;
+  /** "לא הגיע": any approved staff, pending only. */
+  markNoShow(id: string): Promise<void>;
+  /** Back to pending. Marker, homeroom of the class, admin/secretary. */
+  undoNoShow(id: string): Promise<void>;
+  /** VAPID public key for phone notifications (null = server not set up yet). */
+  pushPublicKey(): Promise<string | null>;
+  savePushSubscription(sub: { endpoint: string; p256dh: string; auth: string; userAgent: string }): Promise<void>;
+  deletePushSubscription(endpoint: string): Promise<void>;
   /** Marker, homeroom of the student's class, admin/secretary. Pending only. */
   editDetention(id: string, patch: { reasonId: string | null; reasonText: string; releaseAt: string }): Promise<void>;
   deleteDetention(id: string): Promise<void>;
@@ -288,6 +296,7 @@ export const STATUS_LABEL: Record<DetentionStatus, string> = {
   pending: "ממתין",
   completed: "סיים, בדרכו הביתה",
   cancelled: "בוטל",
+  no_show: "לא הגיע",
 };
 
 export const GENDER_LABEL: Record<Gender, string> = {

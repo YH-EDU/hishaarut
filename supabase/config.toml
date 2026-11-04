@@ -4,3 +4,8 @@ project_id = "hishaarut"
 
 [functions.send-whatsapp]
 verify_jwt = true
+
+# Called by the database (pg_net), not by browsers. It checks its own
+# x-hook-secret header against push_settings.hook_secret.
+[functions.send-push]
+verify_jwt = false

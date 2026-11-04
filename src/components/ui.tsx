@@ -42,7 +42,7 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 export function StatusPill({ status }: { status: DetentionStatus }) {
-  const cls = status === "pending" ? "badge badge-wait" : status === "completed" ? "badge badge-done" : "badge badge-off";
+  const cls = status === "pending" ? "badge badge-wait" : status === "completed" ? "badge badge-done" : status === "no_show" ? "badge badge-warn" : "badge badge-off";
   return <span className={cls}>{STATUS_LABEL[status]}</span>;
 }
 

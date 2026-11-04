@@ -17,6 +17,7 @@ export function MyMarksPage() {
       <PageHeader title="היום" lede="ההשארות שסימנתם היום. מכאן שולחים עדכון להורים בוואטסאפ, עורכים או מוחקים." />
       {flash ? <Banner>{flash}</Banner> : null}
       <TodayMarks />
+      <HomeroomMarks />
     </div>
   );
 }
@@ -89,6 +90,80 @@ export function TodayMarks({ heading }: { heading?: string }) {
             <Button variant="danger" onClick={() => void cancel(row.id)}>
               ביטול הסימון
             </Button>
+          ) : null}
+        </article>
+      ))}
+    </section>
+  );
+}
+
+/** Homeroom teacher: today's detentions of my class's students that someone else marked. */
+export function HomeroomMarks() {
+  const { session } = useAuth();
+  const [rows, setRows] = useState<Detention[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [day, setDay] = useState(() => jerusalemToday());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setDay(jerusalemToday()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!session?.profile.role) return;
+    let live = true;
+    async function load() {
+      const classes = await getApi().listClasses();
+      const mine = new Set(classes.filter((room) => room.homeroomTeacherId === session!.userId).map((room) => room.id));
+      if (mine.size === 0) {
+        if (live) setRows(null);
+        return;
+      }
+      const today = await getApi().listDetentions({ date: jerusalemToday() });
+      if (live) {
+        setRows(today.filter((row) => mine.has(row.classId) && row.markedBy !== session!.userId && row.status !== "cancelled"));
+      }
+    }
+    void load().catch((err: unknown) => live && setError(err instanceof Error ? err.message : "אירעה שגיאה"));
+    const stop = getApi().subscribeDetentions(() => void load().catch(() => undefined));
+    return () => {
+      live = false;
+      stop();
+    };
+  }, [session, day]);
+
+  if (rows === null) return null;
+  return (
+    <section className="stack">
+      <h2>תלמידי הכיתה שלי שסומנו היום</h2>
+      {error ? <Banner tone="danger">{error}</Banner> : null}
+      {rows.length === 0 ? <Empty>אף תלמיד מהכיתה שלך לא סומן היום.</Empty> : null}
+      {rows.map((row) => (
+        <article key={row.id} className="card stack">
+          <div className="spread">
+            <strong>{studentName(row.studentFirstName, row.studentLastName)}</strong>
+            <span className="row">
+              <StatusPill status={row.status} />
+            </span>
+          </div>
+          <div className="release-card">
+            <span>שעת יציאה</span>
+            <strong>
+              <Ltr>{formatTime(row.releaseAt)}</Ltr>
+            </strong>
+          </div>
+          <span>
+            {row.className} · {row.reasonText} · {row.durationMinutes} דק׳ · סימן/ה {row.markerName}
+          </span>
+          {row.status === "pending" ? (
+            <ParentWhatsApp
+              detentionId={row.id}
+              studentName={studentName(row.studentFirstName, row.studentLastName)}
+              className={row.className}
+              releaseTime={formatTime(row.releaseAt)}
+              reason={row.reasonText}
+              teacherName={signatureName(session?.profile)}
+            />
           ) : null}
         </article>
       ))}

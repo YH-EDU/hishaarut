@@ -5,7 +5,7 @@ import type { ClassRoom, Profile, Student } from "../api/types";
 import { useAuth } from "../auth";
 import { PageHeader } from "../components/PageHeader";
 import { ApprovalRow } from "./StaffPage";
-import { TodayMarks } from "./MyMarksPage";
+import { HomeroomMarks, TodayMarks } from "./MyMarksPage";
 import { Banner, Empty, studentName } from "../components/ui";
 import { classKey, classRank } from "../lib/csv";
 import { jerusalemToday } from "../lib/dates";
@@ -142,6 +142,7 @@ export function SearchPage() {
         ))}
       </div>
       {role ? <TodayMarks heading="סימנתי היום" /> : null}
+      {role ? <HomeroomMarks /> : null}
     </div>
   );
 }

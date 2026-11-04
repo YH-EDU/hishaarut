@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { getApi } from "../api";
-import type { ClassRoom, Detention, Reason } from "../api/types";
+import type { ClassRoom, Detention, DetentionStatus, Reason } from "../api/types";
 import { STATUS_LABEL } from "../api/types";
 import { useAuth } from "../auth";
 import { PageHeader } from "../components/PageHeader";
 import { Banner, Button, Field, studentName } from "../components/ui";
 import { formatDate, jerusalemToday, shiftDate } from "../lib/dates";
 import { downloadText, downloadXlsx, reportToCsv, type ReportExportRow } from "../lib/exportReport";
+
+const STATUS_ORDER: DetentionStatus[] = ["completed", "no_show", "pending", "cancelled"];
+const STATUS_SUMMARY: Record<DetentionStatus, string> = {
+  completed: "שוחררו",
+  no_show: "לא הגיעו",
+  pending: "ממתינים",
+  cancelled: "בוטלו",
+};
 
 export function ReportsPage() {
   const role = useAuth().session?.profile.role;
@@ -17,6 +25,7 @@ export function ReportsPage() {
   const [classId, setClassId] = useState("");
   const [reason, setReason] = useState("");
   const [name, setName] = useState("");
+  const [status, setStatus] = useState<DetentionStatus | "">("");
   const [rows, setRows] = useState<Detention[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [reasons, setReasons] = useState<Reason[]>([]);
@@ -57,10 +66,11 @@ export function ReportsPage() {
     return rows.filter((row) => {
       if (classId && row.classId !== classId) return false;
       if (reason && row.reasonText !== reason) return false;
+      if (status && row.status !== status) return false;
       if (q && !`${row.studentFirstName} ${row.studentLastName}`.includes(q)) return false;
       return true;
     });
-  }, [rows, classId, reason, name]);
+  }, [rows, classId, reason, name, status]);
 
   const byReason = useMemo(() => {
     const map = new Map<string, number>();
@@ -134,6 +144,16 @@ export function ReportsPage() {
             ))}
           </select>
         </Field>
+        <Field label="סטטוס">
+          <select value={status} onChange={(event) => setStatus(event.target.value as DetentionStatus | "")}>
+            <option value="">כל הסטטוסים</option>
+            {STATUS_ORDER.map((key) => (
+              <option key={key} value={key}>
+                {STATUS_LABEL[key]}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="תלמיד">
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="חלק מהשם" />
         </Field>
@@ -145,13 +165,17 @@ export function ReportsPage() {
           השארות
         </div>
         <div>
-          <strong>{filtered.filter((row) => row.status === "completed").length}</strong>
-          הושלמו
-        </div>
-        <div>
           <strong>{new Set(filtered.map((row) => row.studentId)).size}</strong>
           תלמידים
         </div>
+      </div>
+      <div className="summary summary-status">
+        {STATUS_ORDER.map((key) => (
+          <div key={key}>
+            <strong>{filtered.filter((row) => row.status === key).length}</strong>
+            {STATUS_SUMMARY[key]}
+          </div>
+        ))}
       </div>
       <div className="chips">
         {byReason.map(([label, count]) => (
