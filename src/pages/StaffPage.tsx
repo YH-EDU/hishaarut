@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { getApi } from "../api";
 import type { ClassRoom, Profile, Role } from "../api/types";
-import { ROLE_LABEL } from "../api/types";
+import { ROLE_LABEL, roleLabel } from "../api/types";
 import { useAuth } from "../auth";
 import { EmptyState, PageHeader } from "../components/PageHeader";
 import { Sheet } from "../components/Sheet";
 import { Banner, Button, Field } from "../components/ui";
 import { TitlePicker } from "../components/TitlePicker";
-import { isFullName, titledName } from "../lib/staffName";
+import { isFullName } from "../lib/staffName";
 
 const STAFF_ROLES: Array<Role | ""> = ["", "teacher", "homeroom", "secretary"];
 
@@ -122,11 +122,11 @@ export function StaffPage() {
                 <span>
                   <b>
                     {profile.fullName || profile.email}
-                    {profile.isOwner ? <span className="owner-badge">בעלים</span> : null}
+                    
                   </b>
                   <span className="muted">
-                    {profile.role ? ROLE_LABEL[profile.role] : "ממתין לאישור"}
-                    {room ? ` · ${room.name}` : ""}
+                    {roleLabel(profile)}
+                    {room ? ` · מחנך ${room.name}` : ""}
                   </span>
                 </span>
                 <span className="badge">{profile.phone ? "יש טלפון" : "אין טלפון"}</span>
@@ -157,13 +157,13 @@ export function StaffPage() {
                 return (
                   <tr key={profile.id}>
                     <td>
-                      {profile.fullName ? titledName(profile) : "—"}
-                      {profile.isOwner ? <span className="owner-badge">בעלים</span> : null}
+                      {profile.fullName || "—"}
+                      
                     </td>
                     <td className="ltr">{profile.email}</td>
                     <td>
                       {locked ? (
-                        profile.role ? ROLE_LABEL[profile.role] : "ממתין לאישור"
+                        roleLabel(profile)
                       ) : (
                         <select
                           value={draft.role}
@@ -235,7 +235,7 @@ export function StaffPage() {
                     <p>
                       <strong>
                         {profile.fullName || "—"}
-                        {profile.isOwner ? <span className="owner-badge">בעלים</span> : null}
+                        
                       </strong>
                       <br />
                       <span className="ltr muted">{profile.email}</span>
@@ -246,7 +246,7 @@ export function StaffPage() {
                           ? "בעל המערכת. אי אפשר לשנות את התפקיד, ורק הבעלים יכול להעביר את הבעלות."
                           : canEdit
                             ? `תפקיד: ${ROLE_LABEL.admin}. רק מנהל יכול לשנות אותו.`
-                            : `תפקיד: ${profile.role ? ROLE_LABEL[profile.role] : "ממתין לאישור"}.`}
+                            : `תפקיד: ${roleLabel(profile)}.`}
                       </p>
                     ) : (
                       <>
@@ -402,15 +402,15 @@ export function ApprovalRow({
   return (
     <div className="stack approval-row">
       <div>
-        <b>{titledName(profile)}</b> <span className="ltr muted">{profile.email}</span>
+        <b>{profile.fullName || "—"}</b> <span className="ltr muted">{profile.email}</span>
         <br />
         <span>
           מבקש: {profile.requestedRole ? ROLE_LABEL[profile.requestedRole] : ""}
           {profile.requestedRole === "homeroom" ? <> · כיתה שנבחרה: <b>{claimed.join(", ") || "לא נבחרה"}</b></> : null}
         </span>
       </div>
-      {missingName || !profile.title ? (
-        <Banner tone="warn">חסר {missingName ? "שם פרטי ומשפחה" : "תואר"}. אפשר להשלים בכרטיס איש הצוות אחרי האישור.</Banner>
+      {missingName ? (
+        <Banner tone="warn">חסר שם פרטי ומשפחה. אפשר להשלים בכרטיס איש הצוות אחרי האישור.</Banner>
       ) : null}
       <Field label="תפקיד לאישור">
         <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
@@ -489,7 +489,7 @@ function NameEditor({
   const dirty = fullName.trim() !== profile.fullName.trim() || title.trim() !== (profile.title ?? "").trim();
   return (
     <div className="stack">
-      <Field label="תואר">
+      <Field label="תואר בחתימה להורים (לא חובה)">
         <TitlePicker value={title} onChange={setTitle} />
       </Field>
       <Field label="שם פרטי ומשפחה">
@@ -498,10 +498,10 @@ function NameEditor({
       {dirty ? (
         <Button
           variant="ghost"
-          disabled={!isFullName(fullName) || !title.trim()}
+          disabled={!isFullName(fullName)}
           onClick={() =>
             void getApi()
-              .updateStaffProfile(profile.id, { fullName: fullName.trim(), title: title.trim() })
+              .updateStaffProfile(profile.id, { fullName: fullName.trim(), title: title.trim() || null })
               .then(async () => {
                 onInfo("הפרטים נשמרו");
                 await onSaved();

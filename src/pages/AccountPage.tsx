@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { getApi } from "../api";
-import { ROLE_LABEL } from "../api/types";
+import { roleLabel } from "../api/types";
 import { useAuth } from "../auth";
 import { Banner, Button, Field } from "../components/ui";
 import { normalizeIlPhone } from "../lib/phone";
@@ -39,11 +39,10 @@ export function AccountPage() {
         <h1>החשבון שלי</h1>
       </header>
       <p className="muted">{profile.email}</p>
-      <p>{profile.role ? ROLE_LABEL[profile.role] : "ממתין לאישור"}</p>
+      <p>{roleLabel(profile)}</p>
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
-      {!profile.title ? <Banner tone="warn">חסר תואר. בחרו איך לפנות אליכם, וזה יופיע בחתימה בהודעות להורים.</Banner> : null}
-      <Field label="תואר (מופיע בחתימה להורים)">
+      <Field label="תואר בחתימה להורים (לא חובה)">
         <TitlePicker value={title} onChange={setTitle} />
       </Field>
       <Field label="שם פרטי ומשפחה">
@@ -54,7 +53,7 @@ export function AccountPage() {
       </Field>
       {phone && !normalizeIlPhone(phone) ? <Banner tone="warn">המספר לא נראה ישראלי.</Banner> : null}
       <p className="muted">המזכירות שולחת למחנך/ת הודעת וואטסאפ למספר הזה כשתלמיד מהכיתה נשאר.</p>
-      <Button disabled={busy || !isFullName(fullName) || !title.trim()} onClick={() => void save()}>
+      <Button disabled={busy || !isFullName(fullName) } onClick={() => void save()}>
         שמירה
       </Button>
       <Button variant="ghost" onClick={() => void signOut()}>

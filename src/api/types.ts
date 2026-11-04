@@ -265,3 +265,9 @@ export const GENDER_LABEL: Record<Gender, string> = {
   male: "זכר",
   female: "נקבה",
 };
+
+/** Role shown in the UI. The system owner reads as "בעלים", never just "מנהל". */
+export function roleLabel(profile: Pick<Profile, "role" | "isOwner"> | null | undefined): string {
+  if (!profile?.role) return "ממתין לאישור";
+  return profile.isOwner ? "בעלים" : ROLE_LABEL[profile.role];
+}

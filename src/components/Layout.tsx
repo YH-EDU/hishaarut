@@ -153,7 +153,10 @@ export function Layout() {
         <header className="topbar no-print">
           <div className="brand desktop-brand">
             <strong>{school}</strong>
-            <span>{session?.profile.fullName || session?.email}</span>
+            <span>
+              {session?.profile.fullName || session?.email}
+              {session?.profile.isOwner ? <span className="owner-badge">בעלים</span> : null}
+            </span>
           </div>
           <h1 className="appbar-title">{titleFor(pathname)}</h1>
           <Link className="btn btn-ghost desktop-account" to="/account">
@@ -268,13 +271,12 @@ function ProfilePrompt() {
   const [hidden, setHidden] = useState(() => localStorage.getItem(key) === "1");
   const profile = session?.profile;
   if (!profile?.role || hidden || pathname === "/account") return null;
-  const missingTitle = !profile.title?.trim();
   const missingName = profile.fullName.trim().split(/\s+/).filter(Boolean).length < 2;
-  if (!missingTitle && !missingName) return null;
+  if (!missingName) return null;
   return (
     <div className="banner banner-warn profile-prompt no-print">
       <span>
-        {missingName ? "השלימו שם פרטי ומשפחה" : "בחרו תואר (הרב / המורה)"}, כדי שהחתימה בהודעות להורים תהיה נכונה.{" "}
+        השלימו שם פרטי ומשפחה, כדי שהחתימה בהודעות להורים תהיה נכונה.{" "}
         <Link to="/account" onClick={() => { localStorage.setItem(key, "1"); setHidden(true); }}>להשלמה</Link>
       </span>
       <button type="button" className="btn btn-ghost" onClick={() => { localStorage.setItem(key, "1"); setHidden(true); }}>

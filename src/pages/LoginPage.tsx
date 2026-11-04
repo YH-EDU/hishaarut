@@ -103,7 +103,7 @@ export function PendingPage() {
     setBusy(true);
     setError(null);
     try {
-      await getApi().updateOwnProfile({ fullName: fullName.trim(), phone: session?.profile.phone ?? "", title: title.trim() });
+      await getApi().updateOwnProfile({ fullName: fullName.trim(), phone: session?.profile.phone ?? "", title: title.trim() || null });
       await getApi().requestStaffRole(choice, choice === "homeroom" ? classIds : []);
       setRequested(choice);
       setRequestedNames(classes.filter((room) => classIds.includes(room.id)).map((room) => room.name));
@@ -130,7 +130,7 @@ export function PendingPage() {
             <input value={fullName} maxLength={120} onChange={(event) => setFullName(event.target.value)} placeholder="למשל: יוסף כהן" />
           </Field>
           {fullName.trim() && !isFullName(fullName) ? <p className="muted">צריך שם פרטי ושם משפחה.</p> : null}
-          <Field label="איך לפנות אליכם (מופיע בחתימה להורים)">
+          <Field label="תואר בחתימה להורים (לא חובה)">
             <TitlePicker value={title} onChange={setTitle} />
           </Field>
           <div className="row">
@@ -157,7 +157,7 @@ export function PendingPage() {
             </div>
           ) : null}
           <Button
-            disabled={busy || !isFullName(fullName) || !title.trim() || (choice === "homeroom" && classIds.length === 0)}
+            disabled={busy || !isFullName(fullName) || (choice === "homeroom" && classIds.length === 0)}
             onClick={() => void submit()}>
             שליחת בקשה
           </Button>
