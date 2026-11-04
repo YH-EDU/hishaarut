@@ -377,7 +377,7 @@ function OwnerTransfer({
   );
 }
 
-function ApprovalRow({
+export function ApprovalRow({
   profile,
   classes,
   onChanged,

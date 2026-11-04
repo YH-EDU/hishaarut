@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getApi } from "../api";
 import type { ClassRoom, Profile, Student } from "../api/types";
-import { ROLE_LABEL } from "../api/types";
 import { useAuth } from "../auth";
 import { PageHeader } from "../components/PageHeader";
-import { Banner, Button, Empty, studentName } from "../components/ui";
+import { ApprovalRow } from "./StaffPage";
+import { Banner, Empty, studentName } from "../components/ui";
 import { classKey, classRank } from "../lib/csv";
 
 const RECENT_KEY = "hishaarut-recent";
@@ -90,46 +90,16 @@ export function SearchPage() {
       {requests.length > 0 ? (
         <section className="panel stack">
           <h2>בקשות לאישור · {requests.length}</h2>
-          {requests.map((profile) => {
-            if (!profile.requestedRole) return null;
-            const names = classesForRequests.filter((room) => profile.requestedClassIds.includes(room.id)).map((room) => room.name);
-            const requestedRole = profile.requestedRole;
-            return (
-              <div key={profile.id} className="spread">
-                <span>
-                  <b>{profile.fullName || profile.email}</b>
-                  <span className="muted">
-                    {" "}
-                    {profile.email} · {ROLE_LABEL[requestedRole]}
-                    {names.length > 0 ? ` · ${names.join(", ")}` : ""}
-                  </span>
-                </span>
-                <span className="row">
-                  <Button
-                    onClick={() =>
-                      void getApi()
-                        .approveStaffRequest(profile.id, requestedRole, profile.requestedClassIds)
-                        .then(loadRequests)
-                        .catch((err: unknown) => setError(err instanceof Error ? err.message : "האישור נכשל"))
-                    }
-                  >
-                    אישור
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      void getApi()
-                        .rejectStaffRequest(profile.id)
-                        .then(loadRequests)
-                        .catch((err: unknown) => setError(err instanceof Error ? err.message : "הדחייה נכשלה"))
-                    }
-                  >
-                    דחייה
-                  </Button>
-                </span>
-              </div>
-            );
-          })}
+          {requests.map((profile) => (
+            <ApprovalRow
+              key={profile.id}
+              profile={profile}
+              classes={classesForRequests}
+              onChanged={loadRequests}
+              onError={setError}
+              onInfo={setFlash}
+            />
+          ))}
         </section>
       ) : null}
       <div className="sticky-search">
