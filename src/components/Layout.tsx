@@ -22,7 +22,6 @@ const MAIN_NAV: NavItem[] = [
 /** Everything else, under ⋮, by importance. Routes in App.tsx enforce the same roles. */
 function moreLinksFor(role: Role): Array<{ to: string; label: string }> {
   const links: Array<{ to: string; label: string; roles: Role[] }> = [
-    { to: "/mine", label: "הסימונים שלי היום", roles: ["teacher", "homeroom", "secretary", "admin"] },
     { to: "/roster", label: "תלמידים וכיתות", roles: ["homeroom", "secretary", "admin"] },
     { to: "/staff", label: "צוות", roles: ["secretary", "admin"] },
     { to: "/settings", label: "הגדרות בית הספר", roles: ["secretary", "admin"] },
@@ -129,11 +128,12 @@ export function Layout() {
               {item.to === "/dashboard" ? <ReadyBadge count={readyCount} /> : null}
             </NavLink>
           ))}
-          <button type="button" className="more-button" aria-haspopup="dialog" aria-expanded={moreOpen} onClick={() => setMoreOpen(true)}>
-            <span aria-hidden="true">⋮</span>
-            <span>עוד</span>
-            {role === "admin" || role === "secretary" ? <ReadyBadge count={pendingCount} /> : null}
-          </button>
+          {moreLinks.map((item) => (
+            <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
+              <span>{item.label}</span>
+              {item.to === "/staff" ? <ReadyBadge count={pendingCount} /> : null}
+            </NavLink>
+          ))}
         </nav>
       </aside>
       <div className="workspace">
