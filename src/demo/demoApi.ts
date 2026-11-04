@@ -418,6 +418,7 @@ export const demoApi: AppApi = {
     const profile = requireUser();
     profile.fullName = patch.fullName.trim();
     profile.phone = patch.phone.trim() || null;
+    if (patch.title !== undefined) profile.title = patch.title?.trim() || null;
     emitSession();
     emitChange();
   },
@@ -567,6 +568,22 @@ export const demoApi: AppApi = {
     const profile = requireUser();
     if (!isStaff(profile)) return [];
     return state.students.map((student) => ({ ...student }));
+  },
+
+  async getDetentionParentPhones(detentionId: string) {
+    const profile = requireUser();
+    const detention = state.detentions.find((item) => item.id === detentionId);
+    if (!detention || detention.status === "cancelled") return { motherPhone: null, fatherPhone: null };
+    const student = state.students.find((item) => item.id === detention.studentId);
+    const allowed = detention.markedBy === profile.id || (student ? canViewContact(profile, student.classId) : false);
+    const c = state.contacts[detention.studentId];
+    if (!allowed || !c) return { motherPhone: null, fatherPhone: null };
+    const pick = (a: string | null, aOff: boolean, b: string | null, bOff: boolean) =>
+      (a && !aOff ? a : null) ?? (b && !bOff ? b : null);
+    return {
+      motherPhone: pick(c.parent2Phone, c.parent2PhoneNoWhatsapp, c.parent2Phone2, c.parent2Phone2NoWhatsapp),
+      fatherPhone: pick(c.parentPhone, c.parentPhoneNoWhatsapp, c.parentPhone2, c.parentPhone2NoWhatsapp),
+    };
   },
 
   async listContacts() {
@@ -744,13 +761,27 @@ export const demoApi: AppApi = {
 
   async listOpenClasses() {
     requireUser();
-    return state.classes.filter((room) => room.active).map((room) => ({ id: room.id, name: room.name }));
+    return state.classes
+      .filter((room) => room.active)
+      .map((room) => ({ id: room.id, name: room.name, hasHomeroom: Boolean(room.homeroomTeacherId) }));
+  },
+
+  async updateStaffProfile(userId, patch) {
+    const profile = requireUser();
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("אין הרשאה לפעולה הזו");
+    const target = state.profiles.find((item) => item.id === userId);
+    if (!target) throw new Error("המשתמש לא נמצא");
+    if (target.role === "admin" && profile.role !== "admin") throw new Error("מזכירות לא יכולה לשנות מנהל");
+    target.fullName = patch.fullName.trim();
+    target.title = patch.title?.trim() || null;
+    emitSession();
+    emitChange();
   },
 
   async requestStaffRole(role, classIds) {
     const profile = requireUser();
     if (profile.role) throw new Error("כבר יש תפקיד לחשבון");
-    if (role !== "teacher" && role !== "homeroom") throw new Error("אפשר לבקש רק מורה מקצועי או מחנך");
+    if (!["teacher", "homeroom", "secretary", "admin"].includes(role)) throw new Error("תפקיד לא תקין");
     if (role === "homeroom" && classIds.length === 0) throw new Error("מחנך בוחר כיתה קיימת");
     profile.requestedRole = role;
     profile.requestedClassIds = role === "homeroom" ? classIds : [];
@@ -761,6 +792,7 @@ export const demoApi: AppApi = {
   async approveStaffRequest(userId, role, classIds) {
     const profile = requireUser();
     if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל או מזכירות יכולים לאשר תפקיד");
+    if (role === "admin" && profile.role !== "admin") throw new Error("מזכירות לא יכולה למנות או לשנות מנהל");
     await this.setUserRole(userId, role);
     const target = state.profiles.find((item) => item.id === userId);
     if (!target) return;

@@ -10,6 +10,8 @@ export interface Profile {
   id: string;
   email: string;
   fullName: string;
+  /** הרב / המורה / free text. Null for users who signed up before titles existed. */
+  title?: string | null;
   phone: string | null;
   role: Role | null;
   requestedRole: Role | null;
@@ -51,11 +53,9 @@ export const DEFAULT_WEEK: WeekSchedule = {
   sat: { start: null, end: null },
 };
 
-export const DEFAULT_PARENT_TEMPLATE = `שלום {parent_name},
-רצינו לעדכן שבנך {student_name} מכיתה {class} יישאר היום בבית הספר לאחר סיום הלימודים, עד השעה {release_time}.
-סיבה: {reason}
-לשאלות אפשר לפנות למזכירות.
-בברכה, צוות הישיבה`;
+export const DEFAULT_PARENT_TEMPLATE = `שלום,
+הריני לעדכן ש{reason_clause} עד השעה {release_time}.
+תודה{teacher_sign}`;
 
 export interface SchoolSettings {
   schoolName: string;
@@ -205,7 +205,8 @@ export interface AppApi {
   signInAs?(role: Role | "pending" | "new"): Promise<void>;
   signOut(): Promise<void>;
   getAccessToken(): Promise<string | null>;
-  updateOwnProfile(patch: { fullName: string; phone: string }): Promise<void>;
+  updateOwnProfile(patch: { fullName: string; phone: string; title?: string | null }): Promise<void>;
+  updateStaffProfile(userId: string, patch: { fullName: string; title: string | null }): Promise<void>;
   getSettings(): Promise<SchoolSettings>;
   updateSettings(patch: SchoolSettings): Promise<void>;
   updateSchedule(schedule: WeekSchedule): Promise<void>;
@@ -221,6 +222,7 @@ export interface AppApi {
   deleteClass(id: string, confirmName?: string): Promise<void>;
   listStudents(): Promise<Student[]>;
   listContacts(): Promise<StudentContact[]>;
+  getDetentionParentPhones(detentionId: string): Promise<{ motherPhone: string | null; fatherPhone: string | null }>;
   saveStudent(input: StudentInput): Promise<void>;
   setWhatsappOptOut(studentId: string, slot: WhatsappSlot, noWhatsapp: boolean): Promise<void>;
   countDetentions(studentIds: string[]): Promise<number>;
@@ -230,8 +232,8 @@ export interface AppApi {
   saveReason(input: ReasonInput): Promise<void>;
   listProfiles(): Promise<Profile[]>;
   setUserRole(userId: string, role: Role | null): Promise<void>;
-  listOpenClasses(): Promise<Array<{ id: string; name: string }>>;
-  requestStaffRole(role: "teacher" | "homeroom", classIds: string[]): Promise<void>;
+  listOpenClasses(): Promise<Array<{ id: string; name: string; hasHomeroom?: boolean }>>;
+  requestStaffRole(role: Role, classIds: string[]): Promise<void>;
   approveStaffRequest(userId: string, role: Role, classIds: string[]): Promise<void>;
   rejectStaffRequest(userId: string): Promise<void>;
   transferOwnership(userId: string): Promise<void>;

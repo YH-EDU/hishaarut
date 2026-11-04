@@ -26,6 +26,7 @@ interface ProfileRow {
   id: string;
   email: string;
   full_name: string;
+  title?: string | null;
   phone: string | null;
   role: Role | null;
   requested_role?: Role | null;
@@ -185,6 +186,7 @@ function mapProfile(row: ProfileRow): Profile {
     id: row.id,
     email: row.email,
     fullName: row.full_name,
+    title: row.title ?? null,
     phone: row.phone,
     role: row.role,
     requestedRole: row.requested_role ?? null,
@@ -285,7 +287,7 @@ async function loadProfile(userId: string, email: string): Promise<Profile> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const { data, error } = await db
       .from("profiles")
-      .select("id, email, full_name, phone, role, requested_role, requested_class_ids, is_owner")
+      .select("id, email, full_name, title, phone, role, requested_role, requested_class_ids, is_owner")
       .eq("id", userId)
       .maybeSingle();
     if (error) throw asError(error);
@@ -389,7 +391,16 @@ export const supabaseApi: AppApi = {
     if (!userId) throw new Error("אין משתמש מחובר");
     const { data, error } = await client()
       .from("profiles")
-      .update({ full_name: patch.fullName, phone: patch.phone })
+      .update({ full_name: patch.fullName, phone: patch.phone, ...(patch.title !== undefined ? { title: patch.title } : {}) })
+      .eq("id", userId)
+      .select("id");
+    requireRows(data as { id: string }[] | null, error);
+  },
+
+  async updateStaffProfile(userId, patch) {
+    const { data, error } = await client()
+      .from("profiles")
+      .update({ full_name: patch.fullName, title: patch.title })
       .eq("id", userId)
       .select("id");
     requireRows(data as { id: string }[] | null, error);
@@ -538,6 +549,13 @@ export const supabaseApi: AppApi = {
     return ((data ?? []) as StudentRow[]).map(mapStudent);
   },
 
+  async getDetentionParentPhones(detentionId: string) {
+    const { data, error } = await client().rpc("get_detention_parent_phones", { p_detention_id: detentionId });
+    if (error) throw asError(error);
+    const row = ((data ?? []) as { mother_phone: string | null; father_phone: string | null }[])[0];
+    return { motherPhone: row?.mother_phone ?? null, fatherPhone: row?.father_phone ?? null };
+  },
+
   async listContacts() {
     const { data, error } = await client().rpc("list_student_contacts");
     if (error) throw asError(error);
@@ -645,7 +663,7 @@ export const supabaseApi: AppApi = {
   async listProfiles() {
     const { data, error } = await client()
       .from("profiles")
-      .select("id, email, full_name, phone, role, requested_role, requested_class_ids, is_owner")
+      .select("id, email, full_name, title, phone, role, requested_role, requested_class_ids, is_owner")
       .order("full_name");
     if (error) throw asError(error);
     return ((data ?? []) as ProfileRow[]).map(mapProfile);
@@ -659,7 +677,11 @@ export const supabaseApi: AppApi = {
   async listOpenClasses() {
     const { data, error } = await client().rpc("list_open_classes");
     if (error) throw asError(error);
-    return ((data ?? []) as Array<{ id: string; name: string }>).map((row) => ({ id: row.id, name: row.name }));
+    return ((data ?? []) as Array<{ id: string; name: string; has_homeroom?: boolean }>).map((row) => ({
+      id: row.id,
+      name: row.name,
+      hasHomeroom: row.has_homeroom ?? false,
+    }));
   },
 
   async requestStaffRole(role, classIds) {

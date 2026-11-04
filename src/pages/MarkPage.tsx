@@ -115,9 +115,9 @@ export function MarkPage() {
       });
       rememberStudent(student.id);
       const verb = student.gender === "female" ? "סומנה" : "סומן";
-      navigate("/search", {
+      navigate("/mine", {
         replace: true,
-        state: { flash: `${studentName(student.firstName, student.lastName)} ${verb} להשארות` },
+        state: { flash: `${studentName(student.firstName, student.lastName)} ${verb} להשארות. עכשיו אפשר לעדכן את ההורים בוואטסאפ.` },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "השמירה נכשלה");
@@ -253,7 +253,7 @@ export function MarkPage() {
       <Button className="sticky-action" block disabled={!ready || busy} onClick={() => void submit()}>
         {busy ? "שומרים…" : "סמן להשארות"}
       </Button>
-      <p className="muted">הסימון נרשם על שם {session?.profile.fullName}. המזכירות תשלח את ההודעה להורה ולמחנך.</p>
+      <p className="muted">הסימון נרשם על שם {session?.profile.fullName}. אחרי הסימון תוכלו לשלוח עדכון להורים מהוואטסאפ שלכם.</p>
     </div>
   );
 }

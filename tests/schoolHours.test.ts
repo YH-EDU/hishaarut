@@ -30,27 +30,23 @@ describe("school hours", () => {
 });
 
 describe("parent template", () => {
-  it("addresses each parent and falls back to שלום", () => {
-    const father = applyParentTemplate(DEFAULT_PARENT_TEMPLATE, {
-      parentName: "דוד כהן",
-      studentName: "יוסף לוי",
-      className: "ז׳1",
-      releaseTime: "16:30",
-      reason: "הפרעה בשיעור",
-    });
-    const unnamed = applyParentTemplate(DEFAULT_PARENT_TEMPLATE, {
-      parentName: "  ",
-      studentName: "יוסף לוי",
-      className: "ז׳1",
-      releaseTime: "16:30",
-      reason: "הפרעה בשיעור",
-    });
-    expect(father.startsWith("שלום דוד כהן,")).toBe(true);
-    expect(father).toContain("בנך יוסף לוי מכיתה ז׳1");
-    expect(father).toContain("עד השעה 16:30");
-    expect(father).toContain("סיבה: הפרעה בשיעור");
-    expect(unnamed.startsWith("שלום,")).toBe(true);
-    expect(unnamed.startsWith("שלום שלום")).toBe(false);
-    expect(father).not.toBe(unnamed);
+  const base = { parentName: null, studentName: "יוסף לוי", className: "ז׳1", releaseTime: "16:30" };
+  it("turns preset reasons into a sentence and signs with the teacher", () => {
+    expect(applyParentTemplate(DEFAULT_PARENT_TEMPLATE, { ...base, reason: "היעדרות משיעור", teacherName: "הרב כהן" })).toBe(
+      "שלום,\nהריני לעדכן שיוסף לוי נעדר משיעור, ולכן יישאר בסוף היום להשלמת עבודה עד השעה 16:30.\nתודה, הרב כהן",
+    );
+  });
+  it("uses בשל for free text and drops a missing signature", () => {
+    expect(applyParentTemplate(DEFAULT_PARENT_TEMPLATE, { ...base, reason: "שימוש בטלפון", teacherName: " " })).toBe(
+      "שלום,\nהריני לעדכן שיוסף לוי יישאר בסוף היום להשלמת עבודה בשל שימוש בטלפון עד השעה 16:30.\nתודה.",
+    );
+  });
+  it("handles a missing reason", () => {
+    expect(applyParentTemplate(DEFAULT_PARENT_TEMPLATE, { ...base, reason: "" })).toBe(
+      "שלום,\nהריני לעדכן שיוסף לוי יישאר בסוף היום להשלמת עבודה עד השעה 16:30.\nתודה.",
+    );
+  });
+  it("keeps older named templates working", () => {
+    expect(applyParentTemplate("שלום {parent_name}, {student_name}", { ...base, parentName: "", studentName: "א", reason: "" })).toBe("שלום, א");
   });
 });
