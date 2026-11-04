@@ -951,6 +951,38 @@ export const demoApi: AppApi = {
     emitChange();
   },
 
+  async markNoShow(id) {
+    const profile = requireUser();
+    if (!isStaff(profile)) throw new Error("אין הרשאה לסמן שהתלמיד לא הגיע");
+    const detention = state.detentions.find((item) => item.id === id);
+    if (!detention || detention.status !== "pending") throw new Error("מעבר סטטוס אינו חוקי");
+    detention.status = "no_show";
+    emitChange();
+  },
+
+  async undoNoShow(id) {
+    const profile = requireUser();
+    const detention = state.detentions.find((item) => item.id === id);
+    if (!detention || detention.status !== "no_show") throw new Error("מעבר סטטוס אינו חוקי");
+    if (!canSign(profile) && detention.markedBy !== profile.id && !state.classes.some((c) => c.id === detention.classId && c.homeroomTeacherId === profile.id)) {
+      throw new Error("אין הרשאה לבטל את הסימון");
+    }
+    detention.status = "pending";
+    emitChange();
+  },
+
+  async pushPublicKey() {
+    return null;
+  },
+
+  async savePushSubscription() {
+    throw new Error("התראות לא זמינות בגרסת ההדגמה");
+  },
+
+  async deletePushSubscription() {
+    return;
+  },
+
   async editDetention(id, patch) {
     const profile = requireUser();
     const detention = state.detentions.find((item) => item.id === id);

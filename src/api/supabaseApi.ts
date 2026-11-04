@@ -791,6 +791,46 @@ export const supabaseApi: AppApi = {
     requireRows(data as { id: string }[] | null, error);
   },
 
+  async markNoShow(id) {
+    const { data, error } = await client().from("detentions").update({ status: "no_show" }).eq("id", id).select("id");
+    requireRows(data as { id: string }[] | null, error);
+  },
+
+  async undoNoShow(id) {
+    const { data, error } = await client().from("detentions").update({ status: "pending" }).eq("id", id).select("id");
+    requireRows(data as { id: string }[] | null, error);
+  },
+
+  async pushPublicKey() {
+    const { data, error } = await client().rpc("push_public_key");
+    if (error) throw asError(error);
+    if (data) return data as string;
+    // First use: ask the send-push function to create the keys once.
+    const base = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
+    try {
+      const response = await fetch(`${base}/functions/v1/send-push?init=1`);
+      if (!response.ok) return null;
+      return ((await response.json()) as { publicKey?: string | null }).publicKey ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  async savePushSubscription(sub) {
+    const { error } = await client().rpc("save_push_subscription", {
+      p_endpoint: sub.endpoint,
+      p_p256dh: sub.p256dh,
+      p_auth: sub.auth,
+      p_user_agent: sub.userAgent,
+    });
+    if (error) throw asError(error);
+  },
+
+  async deletePushSubscription(endpoint) {
+    const { error } = await client().rpc("delete_push_subscription", { p_endpoint: endpoint });
+    if (error) throw asError(error);
+  },
+
   async editDetention(id, patch) {
     const { error } = await client().rpc("edit_detention", {
       p_id: id,

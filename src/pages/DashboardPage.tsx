@@ -97,6 +97,21 @@ export function DashboardPage() {
     }
   }
 
+  async function setNoShow(id: string, undo = false) {
+    setError(null);
+    setBusyId(id);
+    try {
+      if (undo) await getApi().undoNoShow(id);
+      else await getApi().markNoShow(id);
+      await load();
+      if (openId === id) setOpenId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "העדכון נכשל");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function send(note: NotificationRow, phone = note.recipientPhone ?? null) {
     if (!settings) return;
     setError(null);
@@ -152,6 +167,9 @@ export function DashboardPage() {
   const released = visible
     .filter((row) => row.status === "completed")
     .sort((a, b) => b.releaseAt.localeCompare(a.releaseAt));
+  const noShow = visible
+    .filter((row) => row.status === "no_show")
+    .sort((a, b) => a.releaseAt.localeCompare(b.releaseAt));
   const filtered = Boolean(query.trim() || className);
 
   async function releaseReady() {
@@ -208,6 +226,11 @@ export function DashboardPage() {
             <span>
               <b>{released.length}</b> שוחררו
             </span>
+            {noShow.length > 0 ? (
+              <span>
+                <b>{noShow.length}</b> לא הגיעו
+              </span>
+            ) : null}
             {live ? <span>מתעדכן</span> : null}
           </p>
         </div>
@@ -275,6 +298,7 @@ export function DashboardPage() {
                   busy={busyId === row.id || busyId === "all"}
                   onOpen={() => setOpenId(row.id)}
                   onRelease={() => void complete(row.id)}
+                  onNoShow={(undo) => void setNoShow(row.id, undo)}
                 />
               ))
             )}
@@ -288,6 +312,20 @@ export function DashboardPage() {
                 busy={busyId === row.id || busyId === "all"}
                 onOpen={() => setOpenId(row.id)}
                 onRelease={() => void complete(row.id)}
+                onNoShow={(undo) => void setNoShow(row.id, undo)}
+              />
+            ))}
+            {noShow.length > 0 ? <SectionRow title="לא הגיעו" count={noShow.length} /> : null}
+            {noShow.map((row) => (
+              <ReleaseTableRow
+                key={row.id}
+                row={row}
+                now={now}
+                link={null}
+                busy={busyId === row.id}
+                onOpen={() => setOpenId(row.id)}
+                onRelease={() => undefined}
+                onNoShow={(undo) => void setNoShow(row.id, undo)}
               />
             ))}
             <tr className="section">
@@ -308,6 +346,7 @@ export function DashboardPage() {
                     busy={false}
                     onOpen={() => setOpenId(row.id)}
                     onRelease={() => void complete(row.id)}
+                    onNoShow={(undo) => void setNoShow(row.id, undo)}
                   />
                 ))
               : null}
@@ -325,6 +364,12 @@ export function DashboardPage() {
           <h2 className="section-label">עוד לא הגיע הזמן · {upcoming.length}</h2>
           {upcoming.length > 0 ? <div className="release-list">{upcoming.map((row) => phoneRow(row))}</div> : null}
         </section>
+        {noShow.length > 0 ? (
+          <section>
+            <h2 className="section-label">לא הגיעו · {noShow.length}</h2>
+            <div className="release-list">{noShow.map((row) => phoneRow(row))}</div>
+          </section>
+        ) : null}
         <section>
           <button type="button" className="section-toggle" onClick={() => setReleasedOpen((value) => !value)}>
             שוחררו · {released.length}
@@ -401,6 +446,16 @@ export function DashboardPage() {
                 שחרור מוקדם, נרשם על שמי
               </Button>
             ) : null}
+            {open.status === "pending" ? (
+              <Button variant="ghost" disabled={busyId === open.id} onClick={() => void setNoShow(open.id)}>
+                לא הגיע להשארות
+              </Button>
+            ) : null}
+            {open.status === "no_show" ? (
+              <Button variant="ghost" disabled={busyId === open.id} onClick={() => void setNoShow(open.id, true)}>
+                ביטול "לא הגיע" (חזרה להמתנה)
+              </Button>
+            ) : null}
           </div>
         </Sheet>
       ) : null}
@@ -426,7 +481,13 @@ export function DashboardPage() {
         ) : (
           <>
             {canMessage ? link ? <WaLink href={link} /> : <span className="wa-gap" /> : null}
-            <ReleaseControl row={row} waiting={waiting} busy={busyId === row.id || busyId === "all"} onRelease={() => void complete(row.id)} />
+            <ReleaseControl
+              row={row}
+              waiting={waiting}
+              busy={busyId === row.id || busyId === "all"}
+              onRelease={() => void complete(row.id)}
+              onNoShow={(undo) => void setNoShow(row.id, undo)}
+            />
           </>
         )}
       </div>
@@ -451,6 +512,7 @@ function ReleaseTableRow({
   busy,
   onOpen,
   onRelease,
+  onNoShow,
 }: {
   row: Detention;
   now: number;
@@ -458,6 +520,7 @@ function ReleaseTableRow({
   busy: boolean;
   onOpen: () => void;
   onRelease: () => void;
+  onNoShow: (undo: boolean) => void;
 }) {
   const waiting = waitLabel(row.releaseAt, now);
   const ready = row.status === "pending" && !waiting;
@@ -473,7 +536,7 @@ function ReleaseTableRow({
       </td>
       <td>{link ? <WaLink href={link} /> : null}</td>
       <td>
-        <ReleaseControl row={row} waiting={waiting} busy={busy} onRelease={onRelease} />
+        <ReleaseControl row={row} waiting={waiting} busy={busy} onRelease={onRelease} onNoShow={onNoShow} />
       </td>
     </tr>
   );
@@ -506,14 +569,46 @@ function ReleaseControl({
   waiting,
   busy,
   onRelease,
+  onNoShow,
 }: {
   row: Detention;
   waiting: string | null;
   busy: boolean;
   onRelease: () => void;
+  onNoShow: (undo: boolean) => void;
 }) {
+  if (row.status === "no_show") {
+    return (
+      <span className="rel-actions">
+        <span className="released-label">לא הגיע</span>
+        <button
+          type="button"
+          className="noshow-btn"
+          disabled={busy}
+          onClick={(event) => {
+            event.stopPropagation();
+            onNoShow(true);
+          }}
+        >
+          ביטול
+        </button>
+      </span>
+    );
+  }
   if (row.status !== "pending") return <ReleasedBy row={row} />;
   return (
+    <span className="rel-actions">
+    <button
+      type="button"
+      className="noshow-btn"
+      disabled={busy}
+      onClick={(event) => {
+        event.stopPropagation();
+        onNoShow(false);
+      }}
+    >
+      לא הגיע
+    </button>
     <button
       type="button"
       className="rel-btn"
@@ -525,6 +620,7 @@ function ReleaseControl({
     >
       שחרור
     </button>
+    </span>
   );
 }
 

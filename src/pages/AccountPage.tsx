@@ -7,6 +7,7 @@ import { Banner, Button, Field } from "../components/ui";
 import { normalizeIlPhone } from "../lib/phone";
 import { TitlePicker } from "../components/TitlePicker";
 import { isFullName } from "../lib/staffName";
+import { PushOptIn } from "../components/PushOptIn";
 
 export function AccountPage() {
   const { session, refresh, signOut } = useAuth();
@@ -71,6 +72,7 @@ export function AccountPage() {
           שמירת הפרטים
         </Button>
       </section>
+      {profile.role ? <PushOptIn /> : null}
       {profile.role === "teacher" || profile.role === "homeroom" || profile.role === "admin" ? (
         <MyTeaching userId={profile.id} role={profile.role} onSaved={refresh} />
       ) : null}
