@@ -32,9 +32,15 @@ export function TodayMarks({ heading }: { heading?: string }) {
     setRows(data);
   }
 
+  const [day, setDay] = useState(() => jerusalemToday());
+  useEffect(() => {
+    const timer = window.setInterval(() => setDay(jerusalemToday()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     void load().catch((err: unknown) => setError(err instanceof Error ? err.message : "אירעה שגיאה"));
-  }, [session]);
+  }, [session, day]);
 
   async function cancel(id: string) {
     setError(null);

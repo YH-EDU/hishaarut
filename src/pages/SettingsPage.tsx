@@ -5,7 +5,7 @@ import { DEFAULT_PARENT_TEMPLATE } from "../api/types";
 import { useAuth } from "../auth";
 import { EmptyState, PageHeader } from "../components/PageHeader";
 import { Banner, Button, Field } from "../components/ui";
-import { formatDate } from "../lib/dates";
+import { formatDate, jerusalemToday } from "../lib/dates";
 import { applyParentTemplate } from "../lib/messages";
 
 const DAY_FIELDS: Array<{ key: DayKey; label: string }> = [
@@ -38,7 +38,7 @@ export function SettingsPage() {
 
   return (
     <div className="stack">
-      <PageHeader title="הגדרות" lede="סימון השארות פתוח רק בשעות הלימודים. מנהל או מזכירות קובעים את השעות, ימי חופשה, ואת נוסח ההודעה להורים." />
+      <PageHeader title="הגדרות" lede="שעות הלימודים קובעות מתי אפשר לסמן ומתי התלמידים יוצאים. פרטים אישיים (שם, תואר, טלפון, תפקיד) משנים בעמוד החשבון שלי." />
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
       {settings ? (
@@ -157,7 +157,7 @@ function SchoolForm({
   return (
     <section className="panel stack">
       <h2>בית הספר</h2>
-      <p className="muted">כל חשבון גוגל יכול להיכנס ולבקש תפקיד. הנתונים נפתחים רק אחרי שמנהל או מזכירות מאשרים. דומיין לאישור אוטומטי הוא רשות, וכבוי כברירת מחדל.</p>
+      <p className="muted">כל חשבון גוגל יכול להיכנס ולבקש תפקיד. הנתונים נפתחים רק אחרי שמנהל או מזכירות מאשרים. דומיין לאישור אוטומטי הוא רשות.</p>
       <Field label="שם בית הספר בהודעות">
         <input value={draft.schoolName} onChange={(event) => setDraft({ ...draft, schoolName: event.target.value })} />
       </Field>
@@ -169,30 +169,13 @@ function SchoolForm({
           onChange={(event) => setDraft({ ...draft, autoApproveDomain: event.target.value })}
         />
       </Field>
-      <Field label="מספר הוואטסאפ העסקי שמוצג לצוות">
+      <Field label="מספר הוואטסאפ של בית הספר (מוצג לצוות)">
         <input
           className="ltr"
           value={draft.whatsappDisplayNumber ?? ""}
           onChange={(event) => setDraft({ ...draft, whatsappDisplayNumber: event.target.value })}
         />
       </Field>
-      <Field label="Phone number ID לשלב 2">
-        <input
-          className="ltr"
-          value={draft.whatsappPhoneNumberId ?? ""}
-          onChange={(event) => setDraft({ ...draft, whatsappPhoneNumberId: event.target.value })}
-        />
-      </Field>
-      <Field label="אופן שליחה">
-        <select
-          value={draft.notificationMode}
-          onChange={(event) => setDraft({ ...draft, notificationMode: event.target.value as SchoolSettings["notificationMode"] })}
-        >
-          <option value="manual_link">שלב 1: קישור wa.me מהמזכירות</option>
-          <option value="cloud_api">שלב 2: Cloud API (עדיין לא ממומש)</option>
-        </select>
-      </Field>
-      <Banner tone="warn">אסימון הוואטסאפ לא נשמר כאן. בשלב 2 הוא יישמר רק כסוד של פונקציית השרת.</Banner>
       <Button
         disabled={!draft.schoolName.trim()}
         onClick={() =>
@@ -225,7 +208,6 @@ function ScheduleForm({
   onError: (message: string) => void;
 }) {
   const [schedule, setSchedule] = useState<WeekSchedule>(settings.schedule);
-  const [holiday, setHoliday] = useState("");
   const [template, setTemplate] = useState(settings.parentMessageTemplate || DEFAULT_PARENT_TEMPLATE);
   const preview = applyParentTemplate(template, {
     parentName: "דוד כהן",
@@ -262,8 +244,8 @@ function ScheduleForm({
   return (
     <>
       <section className="panel stack">
-        <h2>שעות לימודים</h2>
-        <p className="muted">אפשר לסמן השארות רק בין ההתחלה לסיום, ביום לימודים. ההשארות עצמה מתחילה בשעת הסיום, ושעת היציאה יכולה להיות עד שלוש שעות אחריה. שורה ריקה, כמו שבת, היא יום ללא לימודים.</p>
+        <h2>שעות לימודים קבועות</h2>
+        <p className="muted">הלוח הקבוע לכל שבוע. ההשארות מתחילה בשעת הסיום, ושעת היציאה מחושבת ממנה (עד שלוש שעות אחריה). שורה ריקה, כמו שבת, היא יום ללא לימודים. ברירת המחדל: א׳–ה׳ 16:00, ג׳ 14:00, ו׳ 12:00.</p>
         <div className="hours-grid">
           <div className="hours-grid-head">
             <span>יום</span>
@@ -292,49 +274,7 @@ function ScheduleForm({
         </div>
         <Button onClick={saveHours}>שמירת השעות</Button>
       </section>
-      <section className="panel stack">
-        <h2>יום ללא לימודים</h2>
-        <p className="muted">חופשה או ערב חג. ביום הזה אי אפשר לסמן השארות.</p>
-        <div className="toolbar">
-          <input type="date" aria-label="תאריך ללא לימודים" value={holiday} onChange={(event) => setHoliday(event.target.value)} />
-          <Button
-            disabled={!holiday}
-            onClick={() =>
-              void getApi()
-                .addClosure(holiday)
-                .then(() => {
-                  setHoliday("");
-                  return onSaved("היום נשמר כיום ללא לימודים");
-                })
-                .catch((err: unknown) => onError(err instanceof Error ? err.message : "השמירה נכשלה"))
-            }
-          >
-            הוספה
-          </Button>
-        </div>
-        {settings.closures.length === 0 ? (
-          <p className="muted">אין ימים סגורים מעבר לשבת.</p>
-        ) : (
-          <div className="list">
-            {settings.closures.map((date) => (
-              <div className="closure-row" key={date}>
-                <span>{formatDate(date)}</span>
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    void getApi()
-                      .removeClosure(date)
-                      .then(() => onSaved("היום הוחזר ללוח"))
-                      .catch((err: unknown) => onError(err instanceof Error ? err.message : "המחיקה נכשלה"))
-                  }
-                >
-                  הסרה
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      <SpecialDays settings={settings} onSaved={onSaved} onError={onError} />
       <section className="panel stack">
         <h2>הודעה להורים</h2>
         <p className="muted">נשלחת בנפרד לאב ולאם, כל אחד בשמו. אם אין שם, הפתיחה היא «שלום».</p>
@@ -364,5 +304,104 @@ function ScheduleForm({
         </Button>
       </section>
     </>
+  );
+}
+
+/** One-off dates: no school, or different hours (e.g. a short day before a holiday). */
+function SpecialDays({
+  settings,
+  onSaved,
+  onError,
+}: {
+  settings: SchoolSettings;
+  onSaved: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const [date, setDate] = useState("");
+  const [kind, setKind] = useState<"closed" | "hours">("closed");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const today = jerusalemToday();
+  const days = [
+    ...settings.closures.map((day) => ({ date: day, text: "אין לימודים" })),
+    ...(settings.specialDays ?? []).map((day) => ({
+      date: day.date,
+      text: day.start ? `${day.start}–${day.end}` : `סיום ${day.end}`,
+    })),
+  ]
+    .filter((day) => day.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const invalid = !date || (kind === "hours" && (!end || (Boolean(start) && start >= end)));
+
+  return (
+    <section className="panel stack">
+      <h2>יום מיוחד</h2>
+      <p className="muted">לתאריך אחד בלבד: יום חופש, או יום קצר / ארוך. גובר על הלוח הקבוע, ושעת היציאה מחושבת לפיו.</p>
+      <Field label="תאריך">
+        <input type="date" min={today} value={date} onChange={(event) => setDate(event.target.value)} />
+      </Field>
+      <fieldset className="choice-row">
+        <legend>מה קורה ביום הזה</legend>
+        <label className="choice">
+          <input type="radio" name="special-kind" checked={kind === "closed"} onChange={() => setKind("closed")} />
+          אין לימודים
+        </label>
+        <label className="choice">
+          <input type="radio" name="special-kind" checked={kind === "hours"} onChange={() => setKind("hours")} />
+          שעות אחרות
+        </label>
+      </fieldset>
+      {kind === "hours" ? (
+        <div className="row">
+          <Field label="התחלה (לא חובה)">
+            <input type="time" lang="en-GB" value={start} onChange={(event) => setStart(event.target.value)} />
+          </Field>
+          <Field label="סיום הלימודים">
+            <input type="time" lang="en-GB" value={end} onChange={(event) => setEnd(event.target.value)} />
+          </Field>
+        </div>
+      ) : null}
+      <Button
+        disabled={invalid}
+        onClick={() =>
+          void getApi()
+            .setSpecialDay(date, kind === "hours" ? start || null : null, kind === "hours" ? end : null)
+            .then(() => {
+              setDate("");
+              setStart("");
+              setEnd("");
+              return onSaved("היום המיוחד נשמר");
+            })
+            .catch((err: unknown) => onError(err instanceof Error ? err.message : "השמירה נכשלה"))
+        }
+      >
+        שמירת היום
+      </Button>
+      {days.length === 0 ? (
+        <p className="muted">אין ימים מיוחדים קרובים.</p>
+      ) : (
+        <ul className="list" aria-label="ימים מיוחדים">
+          {days.map((day) => (
+            <li className="closure-row" key={day.date}>
+              <span>
+                <b>{formatDate(day.date)}</b> <span className="muted">{day.text}</span>
+              </span>
+              <Button
+                variant="ghost"
+                aria-label={`הסרת ${formatDate(day.date)}`}
+                onClick={() =>
+                  void getApi()
+                    .removeClosure(day.date)
+                    .then(() => onSaved("היום הוחזר ללוח הקבוע"))
+                    .catch((err: unknown) => onError(err instanceof Error ? err.message : "המחיקה נכשלה"))
+                }
+              >
+                הסרה
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

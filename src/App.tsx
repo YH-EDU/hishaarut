@@ -89,7 +89,7 @@ function SignedIn({ sessionRole }: { sessionRole: Role | null }) {
         <Route
           path="reports"
           element={
-            <Allow roles={["homeroom", "secretary", "admin"]}>
+            <Allow roles={["teacher", "homeroom", "secretary", "admin"]}>
               <ReportsPage />
             </Allow>
           }

@@ -34,34 +34,48 @@ export function AccountPage() {
 
   if (!profile) return null;
 
+  const phoneBad = Boolean(phone) && !normalizeIlPhone(phone);
+
   return (
-    <div className="stack">
+    <div className="stack account-page">
       <header className="page-head">
         <h1>החשבון שלי</h1>
+        <p className="muted">
+          <bdi className="ltr">{profile.email}</bdi> · {roleLabel(profile)}
+        </p>
       </header>
-      <p className="muted">{profile.email}</p>
-      <p>{roleLabel(profile)}</p>
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
-      <Field label="תואר בחתימה להורים (לא חובה)">
-        <TitlePicker value={title} onChange={setTitle} />
-      </Field>
-      <Field label="שם פרטי ומשפחה">
-        <input value={fullName} onChange={(event) => setFullName(event.target.value)} />
-      </Field>
-      <Field label="טלפון נייד לקבלת הודעות">
-        <input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} />
-      </Field>
-      {phone && !normalizeIlPhone(phone) ? <Banner tone="warn">המספר לא נראה ישראלי.</Banner> : null}
-      <p className="muted">המזכירות שולחת למחנך/ת הודעת וואטסאפ למספר הזה כשתלמיד מהכיתה נשאר.</p>
-      <Button disabled={busy || !isFullName(fullName) } onClick={() => void save()}>
-        שמירה
-      </Button>
+      <section className="panel stack" aria-labelledby="acc-details">
+        <h2 id="acc-details">פרטים אישיים</h2>
+        <Field label="שם פרטי ומשפחה">
+          <input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
+        </Field>
+        <Field label="תואר (מופיע רק בחתימה בהודעות להורים)">
+          <TitlePicker value={title} onChange={setTitle} />
+        </Field>
+        <Field label="טלפון נייד">
+          <input
+            className="ltr"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            aria-invalid={phoneBad || undefined}
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+          />
+        </Field>
+        {phoneBad ? <Banner tone="warn">המספר לא נראה ישראלי.</Banner> : null}
+        <p className="muted">למספר הזה נשלחת הודעת וואטסאפ כשתלמיד מהכיתה שלך נשאר.</p>
+        <Button disabled={busy || !isFullName(fullName)} onClick={() => void save()}>
+          שמירת הפרטים
+        </Button>
+      </section>
       {profile.role === "teacher" || profile.role === "homeroom" || profile.role === "admin" ? (
         <MyTeaching userId={profile.id} role={profile.role} onSaved={refresh} />
       ) : null}
       <Button variant="ghost" onClick={() => void signOut()}>
-        יציאה
+        יציאה מהחשבון
       </Button>
     </div>
   );
@@ -110,11 +124,12 @@ function MyTeaching({ userId, role, onSaved }: { userId: string; role: Role; onS
   return (
     <section className="panel stack">
       <h2>{isAdmin ? "כיתת החינוך שלי" : "התפקיד שלי"}</h2>
+      <p className="muted">{isAdmin ? "מנהל יכול להיות גם מחנך של כיתה אחת." : "מחנך בוחר כיתה אחת. השינוי נכנס לתוקף מיד."}</p>
       {message ? <Banner tone={message.tone}>{message.text}</Banner> : null}
       {!isAdmin ? (
-        <div className="row">
-          <Button variant={choice === "teacher" ? "primary" : "ghost"} onClick={() => setChoice("teacher")}>מורה מקצועי</Button>
-          <Button variant={choice === "homeroom" ? "primary" : "ghost"} onClick={() => setChoice("homeroom")}>מחנך</Button>
+        <div className="row" role="group" aria-label="תפקיד">
+          <Button aria-pressed={choice === "teacher"} variant={choice === "teacher" ? "primary" : "ghost"} onClick={() => setChoice("teacher")}>מורה מקצועי</Button>
+          <Button aria-pressed={choice === "homeroom"} variant={choice === "homeroom" ? "primary" : "ghost"} onClick={() => setChoice("homeroom")}>מחנך</Button>
         </div>
       ) : null}
       {isAdmin || choice === "homeroom" ? (
@@ -132,7 +147,7 @@ function MyTeaching({ userId, role, onSaved }: { userId: string; role: Role; onS
       ) : null}
       {taken ? <Banner tone="warn">לכיתה {room?.name} כבר רשום מחנך. שמירה תחליף אותו.</Banner> : null}
       <Button disabled={busy || !changed || (needsClass && !classId)} onClick={() => void save()}>
-        עדכון
+        עדכון התפקיד
       </Button>
     </section>
   );

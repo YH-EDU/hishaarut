@@ -40,6 +40,25 @@ export interface WeekSchedule {
   sat: DayHours;
 }
 
+export interface SpecialDay {
+  date: string;
+  start: string | null;
+  end: string;
+}
+
+/** Hours that apply on a date: special day > closure > weekly. null = no school. */
+export function hoursForDate(
+  settings: Pick<SchoolSettings, "schedule" | "closures" | "specialDays">,
+  date: string,
+  dow: number,
+): DayHours | null {
+  const special = settings.specialDays.find((day) => day.date === date);
+  const weekly = settings.schedule[DAY_KEYS[dow]];
+  if (special) return { start: special.start ?? weekly.start ?? "07:00", end: special.end };
+  if (settings.closures.includes(date)) return null;
+  return weekly.start && weekly.end ? weekly : null;
+}
+
 export const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 export type DayKey = (typeof DAY_KEYS)[number];
 
@@ -65,7 +84,10 @@ export interface SchoolSettings {
   whatsappPhoneNumberId: string | null;
   whatsappDisplayNumber: string | null;
   schedule: WeekSchedule;
+  /** Dates with no school at all. */
   closures: string[];
+  /** One-off dates with their own hours (replace the weekly hours). */
+  specialDays: SpecialDay[];
   parentMessageTemplate: string;
 }
 
@@ -213,6 +235,8 @@ export interface AppApi {
   updateParentTemplate(template: string): Promise<void>;
   addClosure(date: string): Promise<void>;
   removeClosure(date: string): Promise<void>;
+  /** One-off hours for a date. end null = no school that day. */
+  setSpecialDay(date: string, start: string | null, end: string | null): Promise<void>;
   accessStatus(): Promise<AccessStatus>;
   listAllowedEmails(): Promise<string[]>;
   setAllowedEmails(emails: string[]): Promise<void>;

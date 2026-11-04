@@ -1,4 +1,4 @@
-import { DAY_KEYS, DEFAULT_PARENT_TEMPLATE, DEFAULT_WEEK } from "../api/types";
+import { DAY_KEYS, DEFAULT_PARENT_TEMPLATE, DEFAULT_WEEK, hoursForDate } from "../api/types";
 import { closedMarkingMessage, defaultReleaseIso, jerusalemClock, jerusalemDow, jerusalemToday, releaseClockAllowed, withinSchoolHours } from "../lib/dates";
 import { applyParentTemplate, renderDetentionMessage } from "../lib/messages";
 import { normalizeIlPhone, whatsappCandidates } from "../lib/phone";
@@ -109,6 +109,7 @@ function seed(): DemoState {
       autoApproveDomain: null,
       schedule: structuredClone(DEFAULT_WEEK),
       closures: [],
+      specialDays: [],
       parentMessageTemplate: DEFAULT_PARENT_TEMPLATE,
       notificationMode: "manual_link",
       whatsappPhoneNumberId: null,
@@ -435,6 +436,7 @@ export const demoApi: AppApi = {
       ...patch,
       schedule: state.settings.schedule,
       closures: state.settings.closures,
+      specialDays: state.settings.specialDays,
       parentMessageTemplate: state.settings.parentMessageTemplate,
     };
     emitChange();
@@ -463,10 +465,26 @@ export const demoApi: AppApi = {
     emitChange();
   },
 
+  async setSpecialDay(date, start, end) {
+    const profile = requireUser();
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל יכול לעדכן הגדרות");
+    if (start && end && start >= end) throw new Error("שעת ההתחלה חייבת להיות לפני שעת הסיום");
+    const closures = state.settings.closures.filter((item) => item !== date);
+    const specialDays = (state.settings.specialDays ?? []).filter((item) => item.date !== date);
+    if (end) specialDays.push({ date, start, end });
+    else closures.push(date);
+    state.settings = { ...state.settings, closures: closures.sort(), specialDays: specialDays.sort((a, b) => a.date.localeCompare(b.date)) };
+    emitChange();
+  },
+
   async removeClosure(date) {
     const profile = requireUser();
     if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("רק מנהל יכול לעדכן הגדרות");
-    state.settings = { ...state.settings, closures: state.settings.closures.filter((item) => item !== date) };
+    state.settings = {
+      ...state.settings,
+      closures: state.settings.closures.filter((item) => item !== date),
+      specialDays: (state.settings.specialDays ?? []).filter((item) => item.date !== date),
+    };
     emitChange();
   },
 
@@ -828,13 +846,13 @@ export const demoApi: AppApi = {
 
   async listReport(from, to) {
     const profile = requireUser();
-    if (profile.role !== "homeroom" && profile.role !== "secretary" && profile.role !== "admin") {
-      throw new Error("אין הרשאה לדוח");
-    }
+    if (!profile.role) throw new Error("אין הרשאה לדוח");
     const own = new Set(state.classes.filter((room) => room.homeroomTeacherId === profile.id).map((room) => room.id));
     return state.detentions
       .filter((detention) => detention.detentionDate >= from && detention.detentionDate <= to)
-      .filter((detention) => profile.role === "homeroom" ? own.has(detention.classId) : true)
+      .filter((detention) =>
+        profile.role === "admin" || profile.role === "secretary" ? true : own.has(detention.classId) || detention.markedBy === profile.id,
+      )
       .map((detention) => ({ ...detention }));
   },
 
@@ -864,10 +882,11 @@ export const demoApi: AppApi = {
     }
     if (!reasonText) throw new Error("יש לבחור סיבה");
     const todayKey = DAY_KEYS[jerusalemDow()];
-    const todayHours = state.settings.schedule[todayKey];
+    const todayHours = hoursForDate({ ...state.settings, specialDays: state.settings.specialDays ?? [] }, jerusalemToday(), jerusalemDow()) ?? { start: null, end: null };
+    void todayKey;
     const sample = DAY_KEYS.map((key) => state.settings.schedule[key]).find((day) => day.start && day.end) ?? { start: "07:00", end: "16:00" };
     const messageHours = todayHours.start && todayHours.end ? todayHours : sample;
-    const open = !state.settings.closures.includes(jerusalemToday()) && withinSchoolHours(todayHours.start, todayHours.end);
+    const open = withinSchoolHours(todayHours.start, todayHours.end);
     if (!open) {
       throw new Error(closedMarkingMessage(messageHours.start ?? "07:00", messageHours.end ?? "16:00"));
     }

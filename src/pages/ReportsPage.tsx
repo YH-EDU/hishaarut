@@ -88,7 +88,13 @@ export function ReportsPage() {
         </p>
       </div>
       <div className="no-print">
-        <PageHeader title="דוחות" lede="כמה השארות היו לפי תלמיד, כיתה, סיבה וטווח תאריכים. אפשר לייצא או להדפיס." />
+        <PageHeader title="דוחות" lede={
+            role === "admin" || role === "secretary"
+              ? "כל ההשארות בבית הספר, לפי תלמיד, כיתה, סיבה וטווח תאריכים. אפשר לייצא או להדפיס."
+              : role === "homeroom"
+                ? "ההשארות של הכיתה שלך וההשארות שסימנת, לפי תאריכים. אפשר לייצא או להדפיס."
+                : "ההשארות שסימנת, לפי תאריכים. אפשר לייצא או להדפיס."
+          } />
       </div>
       {error ? <Banner tone="danger">{error}</Banner> : null}
       <section className="card stack no-print">
@@ -104,7 +110,13 @@ export function ReportsPage() {
           <select value={classId} onChange={(event) => setClassId(event.target.value)}>
             <option value="">כל הכיתות</option>
             {classes
-              .filter((room) => role !== "homeroom" || room.homeroomTeacherId === userId)
+              .filter(
+                (room) =>
+                  role === "admin" ||
+                  role === "secretary" ||
+                  room.homeroomTeacherId === userId ||
+                  rows.some((row) => row.classId === room.id),
+              )
               .map((room) => (
               <option key={room.id} value={room.id}>
                 {room.name}

@@ -54,6 +54,14 @@ export function DashboardPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  // New day = empty screen: reload when the Jerusalem date changes.
+  const day = jerusalemToday(new Date(now));
+  useEffect(() => {
+    setOpenId(null);
+    void load().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day]);
+
   const load = useCallback(async () => {
     const today = jerusalemToday();
     const detentions = await getApi().listDetentions({ date: today });

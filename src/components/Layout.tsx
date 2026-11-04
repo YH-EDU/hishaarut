@@ -9,52 +9,38 @@ import { Sheet } from "./Sheet";
 interface NavItem {
   to: string;
   label: string;
-  icon: "today" | "mark" | "students" | "more" | "account" | "release";
+  icon: "mark" | "release" | "reports";
 }
 
-function desktopNav(role: Role): Array<{ to: string; label: string }> {
-  const mark = { to: "/search", label: "סימון תלמיד" };
-  const releases = { to: "/dashboard", label: "שחרורים" };
-  const students = { to: "/roster", label: "תלמידים וכיתות" };
-  const staff = { to: "/staff", label: "צוות" };
-  const reports = { to: "/reports", label: "דוחות" };
-  const settings = { to: "/settings", label: "הגדרות" };
-  if (role === "admin") return [mark, releases, students, staff, reports, settings];
-  if (role === "secretary") return [mark, releases, students, staff, reports, settings];
-  if (role === "homeroom") return [mark, releases, students, reports];
-  return [mark, releases];
-}
+/** The three main destinations, the same for every role (on phone and desktop). */
+const MAIN_NAV: NavItem[] = [
+  { to: "/search", label: "סימון תלמידים", icon: "mark" },
+  { to: "/dashboard", label: "שחרורים", icon: "release" },
+  { to: "/reports", label: "דוחות", icon: "reports" },
+];
 
-function phoneTabs(role: Role): NavItem[] {
-  const mark = { to: "/search", label: "סימון", icon: "mark" as const };
-  const releases = { to: "/dashboard", label: "שחרורים", icon: "release" as const };
-  const students = { to: "/roster", label: "תלמידים", icon: "students" as const };
-  const more = { to: "#more", label: "עוד", icon: "more" as const };
-  if (role === "teacher") return [mark, releases, more];
-  return [mark, releases, students, more];
-}
-
+/** Everything else, under ⋮, by importance. Routes in App.tsx enforce the same roles. */
 function moreLinksFor(role: Role): Array<{ to: string; label: string }> {
-  const staff = { to: "/staff", label: "צוות" };
-  const reports = { to: "/reports", label: "דוחות" };
-  const settings = { to: "/settings", label: "הגדרות" };
-  const account = { to: "/account", label: "החשבון" };
-  if (role === "admin") return [staff, reports, settings, account];
-  if (role === "secretary") return [staff, reports, settings, account];
-  if (role === "homeroom") return [reports, account];
-  return [account];
+  const links: Array<{ to: string; label: string; roles: Role[] }> = [
+    { to: "/mine", label: "הסימונים שלי היום", roles: ["teacher", "homeroom", "secretary", "admin"] },
+    { to: "/roster", label: "תלמידים וכיתות", roles: ["homeroom", "secretary", "admin"] },
+    { to: "/staff", label: "צוות", roles: ["secretary", "admin"] },
+    { to: "/settings", label: "הגדרות בית הספר", roles: ["secretary", "admin"] },
+    { to: "/account", label: "החשבון שלי", roles: ["teacher", "homeroom", "secretary", "admin"] },
+  ];
+  return links.filter((link) => link.roles.includes(role));
 }
 
 function titleFor(pathname: string): string {
   if (pathname.startsWith("/dashboard")) return "שחרורים";
   if (pathname.startsWith("/mine")) return "היום";
-  if (pathname.startsWith("/search") || pathname.startsWith("/students/")) return "סימון";
+  if (pathname.startsWith("/search") || pathname.startsWith("/students/")) return "סימון תלמידים";
   if (pathname.startsWith("/class")) return "הכיתה שלי";
-  if (pathname.startsWith("/roster")) return "תלמידים";
+  if (pathname.startsWith("/roster")) return "תלמידים וכיתות";
   if (pathname.startsWith("/staff")) return "צוות";
   if (pathname.startsWith("/reports")) return "דוחות";
   if (pathname.startsWith("/settings")) return "הגדרות";
-  if (pathname.startsWith("/account")) return "החשבון";
+  if (pathname.startsWith("/account")) return "החשבון שלי";
   return "נשארים";
 }
 
@@ -62,8 +48,6 @@ export function Layout() {
   const { session, demo } = useAuth();
   const { pathname } = useLocation();
   const role = session?.profile.role ?? "teacher";
-  const side = desktopNav(role);
-  const tabs = phoneTabs(role);
   const [school, setSchool] = useState("נשארים");
   const [moreOpen, setMoreOpen] = useState(false);
   const [readyCount, setReadyCount] = useState(0);
@@ -138,14 +122,18 @@ export function Layout() {
           <strong>נשארים</strong>
           <span>{school}</span>
         </div>
-        <nav>
-          {side.map((item) => (
+        <nav aria-label="ניווט ראשי">
+          {MAIN_NAV.map((item) => (
             <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
               <span>{item.label}</span>
               {item.to === "/dashboard" ? <ReadyBadge count={readyCount} /> : null}
-              {item.to === "/staff" ? <ReadyBadge count={pendingCount} /> : null}
             </NavLink>
           ))}
+          <button type="button" className="more-button" aria-haspopup="dialog" aria-expanded={moreOpen} onClick={() => setMoreOpen(true)}>
+            <span aria-hidden="true">⋮</span>
+            <span>עוד</span>
+            {role === "admin" || role === "secretary" ? <ReadyBadge count={pendingCount} /> : null}
+          </button>
         </nav>
       </aside>
       <div className="workspace">
@@ -159,9 +147,6 @@ export function Layout() {
             </span>
           </div>
           <h1 className="appbar-title">{titleFor(pathname)}</h1>
-          <Link className="btn btn-ghost desktop-account" to="/account">
-            חשבון
-          </Link>
         </header>
         <main className="main">
           <ProfilePrompt />
@@ -174,24 +159,28 @@ export function Layout() {
         ) : null}
       </div>
       <nav className="tabbar no-print" aria-label="ניווט">
-        {tabs.map((item) =>
-          item.to === "#more" ? (
-            <button key="more" type="button" className={moreOpen ? "active" : undefined} onClick={() => setMoreOpen(true)}>
-              <TabIcon name={item.icon} />
-              {role === "admin" || role === "secretary" ? <ReadyBadge count={pendingCount} /> : null}
-              <span>{item.label}</span>
-            </button>
-          ) : (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
-              <TabIcon name={item.icon} />
-              {item.to === "/dashboard" ? <ReadyBadge count={readyCount} /> : null}
-              <span>{item.label}</span>
-            </NavLink>
-          ),
-        )}
+        {MAIN_NAV.map((item) => (
+          <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
+            <TabIcon name={item.icon} />
+            {item.to === "/dashboard" ? <ReadyBadge count={readyCount} /> : null}
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+        <button
+          type="button"
+          className={moreOpen ? "active" : undefined}
+          aria-label="תפריט נוסף"
+          aria-haspopup="dialog"
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen(true)}
+        >
+          <TabIcon name="more" />
+          {role === "admin" || role === "secretary" ? <ReadyBadge count={pendingCount} /> : null}
+          <span>עוד</span>
+        </button>
       </nav>
       {moreOpen ? (
-        <Sheet title="עוד" onClose={() => setMoreOpen(false)}>
+        <Sheet title="תפריט" onClose={() => setMoreOpen(false)}>
           <div className="more-list">
             {moreLinks.map((item) => (
               <Link key={item.to} to={item.to} onClick={() => setMoreOpen(false)}>
@@ -211,7 +200,7 @@ function ReadyBadge({ count }: { count: number }) {
   return <span className="nav-badge">{count > 99 ? "99" : count}</span>;
 }
 
-function TabIcon({ name }: { name: NavItem["icon"] }) {
+function TabIcon({ name }: { name: NavItem["icon"] | "more" }) {
   const common = { width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, "aria-hidden": true as const };
   if (name === "release") {
     return (
@@ -220,11 +209,10 @@ function TabIcon({ name }: { name: NavItem["icon"] }) {
       </svg>
     );
   }
-  if (name === "today") {
+  if (name === "reports") {
     return (
       <svg {...common}>
-        <circle cx="12" cy="12" r="8" />
-        <path d="M12 8v5l3 2" />
+        <path d="M5 20V10M12 20V4M19 20v-7" />
       </svg>
     );
   }
@@ -233,24 +221,6 @@ function TabIcon({ name }: { name: NavItem["icon"] }) {
       <svg {...common}>
         <circle cx="11" cy="11" r="6" />
         <path d="M15.5 15.5L20 20" />
-      </svg>
-    );
-  }
-  if (name === "students") {
-    return (
-      <svg {...common}>
-        <circle cx="9" cy="9" r="3" />
-        <path d="M4 18c.6-2.4 2.5-4 5-4s4.4 1.6 5 4" />
-        <circle cx="17" cy="10" r="2.2" />
-        <path d="M16 18c.3-1.4 1.2-2.5 2.6-3" />
-      </svg>
-    );
-  }
-  if (name === "account") {
-    return (
-      <svg {...common}>
-        <circle cx="12" cy="9" r="3" />
-        <path d="M6 19c1-2.8 3-4 6-4s5 1.2 6 4" />
       </svg>
     );
   }
