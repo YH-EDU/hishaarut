@@ -115,7 +115,7 @@ export function MarkPage() {
       });
       rememberStudent(student.id);
       const verb = student.gender === "female" ? "סומנה" : "סומן";
-      navigate("/mine", {
+      navigate("/search", {
         replace: true,
         state: { flash: `${studentName(student.firstName, student.lastName)} ${verb} להשארות. עכשיו אפשר לעדכן את ההורים בוואטסאפ.` },
       });

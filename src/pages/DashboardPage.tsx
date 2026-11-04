@@ -4,6 +4,7 @@ import type { Detention, NotificationRow, SchoolSettings } from "../api/types";
 import { useAuth } from "../auth";
 import { GettingStarted } from "../components/GettingStarted";
 import { Sheet } from "../components/Sheet";
+import { DetentionMenu } from "../components/DetentionMenu";
 import { Banner, Button, Empty, Ltr } from "../components/ui";
 import { classRank } from "../lib/csv";
 import { formatTime, jerusalemToday } from "../lib/dates";
@@ -352,7 +353,17 @@ export function DashboardPage() {
               {open.className} · {open.reasonText} · {open.durationMinutes} דק׳ · יציאה <Ltr>{formatTime(open.releaseAt)}</Ltr>
             </p>
             {open.notes ? <p>{open.notes}</p> : null}
-            <p className="muted">סימן {open.markerName}</p>
+            <div className="spread">
+              <p className="muted">סימן {open.markerName}</p>
+              <DetentionMenu
+                row={open}
+                onChanged={async () => {
+                  setOpenId(null);
+                  await load();
+                }}
+                onError={setError}
+              />
+            </div>
             {open.status === "completed" ? <ReleasedBy row={open} /> : null}
             {canMessage
               ? openNotes.map((note) => (

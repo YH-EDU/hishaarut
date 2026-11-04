@@ -303,3 +303,6 @@ begin
   return new;
 end;
 $$;
+
+-- Also needed (see 20260312000000_fix_profile_title_select.sql)
+grant select (title) on public.profiles to authenticated;

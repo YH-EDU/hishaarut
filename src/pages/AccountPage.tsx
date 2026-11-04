@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { ClassRoom, Role } from "../api/types";
 import { getApi } from "../api";
-import { ROLE_LABEL } from "../api/types";
+import { roleLabel } from "../api/types";
 import { useAuth } from "../auth";
 import { Banner, Button, Field } from "../components/ui";
 import { normalizeIlPhone } from "../lib/phone";
@@ -39,11 +40,10 @@ export function AccountPage() {
         <h1>החשבון שלי</h1>
       </header>
       <p className="muted">{profile.email}</p>
-      <p>{profile.role ? ROLE_LABEL[profile.role] : "ממתין לאישור"}</p>
+      <p>{roleLabel(profile)}</p>
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
-      {!profile.title ? <Banner tone="warn">חסר תואר. בחרו איך לפנות אליכם, וזה יופיע בחתימה בהודעות להורים.</Banner> : null}
-      <Field label="תואר (מופיע בחתימה להורים)">
+      <Field label="תואר בחתימה להורים (לא חובה)">
         <TitlePicker value={title} onChange={setTitle} />
       </Field>
       <Field label="שם פרטי ומשפחה">
@@ -54,12 +54,86 @@ export function AccountPage() {
       </Field>
       {phone && !normalizeIlPhone(phone) ? <Banner tone="warn">המספר לא נראה ישראלי.</Banner> : null}
       <p className="muted">המזכירות שולחת למחנך/ת הודעת וואטסאפ למספר הזה כשתלמיד מהכיתה נשאר.</p>
-      <Button disabled={busy || !isFullName(fullName) || !title.trim()} onClick={() => void save()}>
+      <Button disabled={busy || !isFullName(fullName) } onClick={() => void save()}>
         שמירה
       </Button>
+      {profile.role === "teacher" || profile.role === "homeroom" || profile.role === "admin" ? (
+        <MyTeaching userId={profile.id} role={profile.role} onSaved={refresh} />
+      ) : null}
       <Button variant="ghost" onClick={() => void signOut()}>
         יציאה
       </Button>
     </div>
+  );
+}
+
+/** Teacher <-> homeroom switch (with one class). Admin/owner keep their role and may only set their own class. */
+function MyTeaching({ userId, role, onSaved }: { userId: string; role: Role; onSaved: () => Promise<void> | void }) {
+  const isAdmin = role === "admin";
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
+  const [choice, setChoice] = useState<"teacher" | "homeroom">(role === "teacher" ? "teacher" : "homeroom");
+  const [classId, setClassId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
+
+  useEffect(() => {
+    void getApi()
+      .listClasses()
+      .then((rooms) => {
+        setClasses(rooms.filter((room) => room.active));
+        setClassId(rooms.find((room) => room.homeroomTeacherId === userId)?.id ?? "");
+      })
+      .catch(() => setClasses([]));
+  }, [userId]);
+
+  const mine = classes.find((room) => room.homeroomTeacherId === userId)?.id ?? "";
+  const room = classes.find((item) => item.id === classId);
+  const taken = room?.homeroomTeacherId && room.homeroomTeacherId !== userId;
+  const needsClass = !isAdmin && choice === "homeroom";
+  const changed = isAdmin ? classId !== mine : choice !== role || (choice === "homeroom" && classId !== mine);
+
+  async function save() {
+    if (taken && !window.confirm(`לכיתה ${room?.name} כבר רשום מחנך. להחליף אותו?`)) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await getApi().setMyTeaching(isAdmin ? "homeroom" : choice, isAdmin || choice === "homeroom" ? classId || null : null);
+      await onSaved();
+      setMessage({ tone: "ok", text: "עודכן" });
+    } catch (err) {
+      setMessage({ tone: "danger", text: err instanceof Error ? err.message : "השמירה נכשלה" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel stack">
+      <h2>{isAdmin ? "כיתת החינוך שלי" : "התפקיד שלי"}</h2>
+      {message ? <Banner tone={message.tone}>{message.text}</Banner> : null}
+      {!isAdmin ? (
+        <div className="row">
+          <Button variant={choice === "teacher" ? "primary" : "ghost"} onClick={() => setChoice("teacher")}>מורה מקצועי</Button>
+          <Button variant={choice === "homeroom" ? "primary" : "ghost"} onClick={() => setChoice("homeroom")}>מחנך</Button>
+        </div>
+      ) : null}
+      {isAdmin || choice === "homeroom" ? (
+        <Field label="כיתה">
+          <select value={classId} onChange={(event) => setClassId(event.target.value)}>
+            <option value="">{isAdmin ? "בלי כיתה" : "בחרו כיתה"}</option>
+            {classes.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+                {item.homeroomTeacherId && item.homeroomTeacherId !== userId ? " (יש מחנך)" : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      {taken ? <Banner tone="warn">לכיתה {room?.name} כבר רשום מחנך. שמירה תחליף אותו.</Banner> : null}
+      <Button disabled={busy || !changed || (needsClass && !classId)} onClick={() => void save()}>
+        עדכון
+      </Button>
+    </section>
   );
 }

@@ -242,6 +242,11 @@ export interface AppApi {
   createDetention(input: DetentionInput): Promise<string>;
   completeDetention(id: string, early?: boolean): Promise<void>;
   cancelDetention(id: string): Promise<void>;
+  /** Marker, homeroom of the student's class, admin/secretary. Pending only. */
+  editDetention(id: string, patch: { reasonId: string | null; reasonText: string; releaseAt: string }): Promise<void>;
+  deleteDetention(id: string): Promise<void>;
+  /** Self-service: teacher <-> homeroom (with one class). Admin/owner may only set own class. */
+  setMyTeaching(role: "teacher" | "homeroom", classId: string | null): Promise<void>;
   listNotifications(detentionIds: string[]): Promise<NotificationRow[]>;
   listDispatch(date: string): Promise<NotificationRow[]>;
   setNotificationSent(id: string, sent: boolean): Promise<void>;
@@ -265,3 +270,9 @@ export const GENDER_LABEL: Record<Gender, string> = {
   male: "זכר",
   female: "נקבה",
 };
+
+/** Role shown in the UI. The system owner reads as "בעלים", never just "מנהל". */
+export function roleLabel(profile: Pick<Profile, "role" | "isOwner"> | null | undefined): string {
+  if (!profile?.role) return "ממתין לאישור";
+  return profile.isOwner ? "בעלים" : ROLE_LABEL[profile.role];
+}

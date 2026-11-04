@@ -932,6 +932,49 @@ export const demoApi: AppApi = {
     emitChange();
   },
 
+  async editDetention(id, patch) {
+    const profile = requireUser();
+    const detention = state.detentions.find((item) => item.id === id);
+    if (!detention) throw new Error("ההשארות לא נמצאה");
+    if (!demoCanChange(profile, detention)) throw new Error("אין הרשאה לערוך את ההשארות");
+    if (detention.status !== "pending") throw new Error("אפשר לערוך רק השארות שעוד לא הסתיימה");
+    const minutes = Math.ceil((Date.parse(patch.releaseAt) - Date.parse(detention.markedAt)) / 60000);
+    if (minutes < 1 || minutes > 240) throw new Error("שעת היציאה עד 4 שעות אחרי הסימון");
+    const label = patch.reasonId ? state.reasons.find((reason) => reason.id === patch.reasonId)?.label : patch.reasonText.trim();
+    if (!label) throw new Error("יש לבחור סיבה");
+    detention.reasonId = patch.reasonId;
+    detention.reasonText = label;
+    detention.releaseAt = patch.releaseAt;
+    detention.durationMinutes = minutes;
+    emitChange();
+  },
+
+  async deleteDetention(id) {
+    const profile = requireUser();
+    const detention = state.detentions.find((item) => item.id === id);
+    if (!detention) return;
+    if (!demoCanChange(profile, detention)) throw new Error("אין הרשאה למחוק את ההשארות");
+    state.detentions = state.detentions.filter((item) => item.id !== id);
+    state.notifications = state.notifications.filter((note) => note.detentionId !== id);
+    emitChange();
+  },
+
+  async setMyTeaching(role, classId) {
+    const profile = requireUser();
+    const staffAdmin = profile.role === "admin";
+    if (profile.role !== "teacher" && profile.role !== "homeroom" && !staffAdmin) throw new Error("אין הרשאה לשנות תפקיד");
+    const wantsClass = staffAdmin ? Boolean(classId) : role === "homeroom";
+    if (wantsClass && !state.classes.some((room) => room.id === classId && room.active)) throw new Error("מחנך בוחר כיתה אחת קיימת");
+    for (const room of state.classes) if (room.homeroomTeacherId === profile.id) room.homeroomTeacherId = null;
+    if (!staffAdmin) profile.role = role;
+    if (wantsClass) {
+      const room = state.classes.find((item) => item.id === classId);
+      if (room) room.homeroomTeacherId = profile.id;
+    }
+    emitSession();
+    emitChange();
+  },
+
   async listNotifications(detentionIds) {
     const profile = requireUser();
     if (!isStaff(profile)) return [];
@@ -966,3 +1009,9 @@ export const demoApi: AppApi = {
     return () => changeListeners.delete(onChange);
   },
 };
+
+function demoCanChange(profile: Profile, detention: Detention): boolean {
+  if (profile.role === "admin" || profile.role === "secretary") return true;
+  if (detention.markedBy === profile.id && profile.role) return true;
+  return state.classes.some((room) => room.id === detention.classId && room.homeroomTeacherId === profile.id);
+}
