@@ -161,6 +161,7 @@ export function Layout() {
           </Link>
         </header>
         <main className="main">
+          <ProfilePrompt />
           <Outlet />
         </main>
         {showFab ? (
@@ -256,5 +257,29 @@ function TabIcon({ name }: { name: NavItem["icon"] }) {
       <circle cx="12" cy="12" r="1.2" fill="currentColor" />
       <circle cx="18" cy="12" r="1.2" fill="currentColor" />
     </svg>
+  );
+}
+
+/** One-time nudge for users who signed up before titles existed. */
+function ProfilePrompt() {
+  const { session } = useAuth();
+  const { pathname } = useLocation();
+  const key = `profile-prompt-${session?.userId ?? ""}`;
+  const [hidden, setHidden] = useState(() => localStorage.getItem(key) === "1");
+  const profile = session?.profile;
+  if (!profile?.role || hidden || pathname === "/account") return null;
+  const missingTitle = !profile.title?.trim();
+  const missingName = profile.fullName.trim().split(/\s+/).filter(Boolean).length < 2;
+  if (!missingTitle && !missingName) return null;
+  return (
+    <div className="banner banner-warn profile-prompt no-print">
+      <span>
+        {missingName ? "השלימו שם פרטי ומשפחה" : "בחרו תואר (הרב / המורה)"}, כדי שהחתימה בהודעות להורים תהיה נכונה.{" "}
+        <Link to="/account" onClick={() => { localStorage.setItem(key, "1"); setHidden(true); }}>להשלמה</Link>
+      </span>
+      <button type="button" className="btn btn-ghost" onClick={() => { localStorage.setItem(key, "1"); setHidden(true); }}>
+        לא עכשיו
+      </button>
+    </div>
   );
 }

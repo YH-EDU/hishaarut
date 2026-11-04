@@ -418,6 +418,7 @@ export const demoApi: AppApi = {
     const profile = requireUser();
     profile.fullName = patch.fullName.trim();
     profile.phone = patch.phone.trim() || null;
+    if (patch.title !== undefined) profile.title = patch.title?.trim() || null;
     emitSession();
     emitChange();
   },
@@ -760,7 +761,21 @@ export const demoApi: AppApi = {
 
   async listOpenClasses() {
     requireUser();
-    return state.classes.filter((room) => room.active).map((room) => ({ id: room.id, name: room.name }));
+    return state.classes
+      .filter((room) => room.active)
+      .map((room) => ({ id: room.id, name: room.name, hasHomeroom: Boolean(room.homeroomTeacherId) }));
+  },
+
+  async updateStaffProfile(userId, patch) {
+    const profile = requireUser();
+    if (profile.role !== "admin" && profile.role !== "secretary") throw new Error("אין הרשאה לפעולה הזו");
+    const target = state.profiles.find((item) => item.id === userId);
+    if (!target) throw new Error("המשתמש לא נמצא");
+    if (target.role === "admin" && profile.role !== "admin") throw new Error("מזכירות לא יכולה לשנות מנהל");
+    target.fullName = patch.fullName.trim();
+    target.title = patch.title?.trim() || null;
+    emitSession();
+    emitChange();
   },
 
   async requestStaffRole(role, classIds) {

@@ -119,3 +119,83 @@ where id = 1
        or parent_message_template like 'שלום {parent_name},%רצינו לעדכן שבנך%'
        or parent_message_template like 'שלום, עדכון מהישיבה:%'
        or parent_message_template like 'שלום,%הריני לעדכן ש{reason_clause}%');
+
+-- ---------------------------------------------------------------------------
+-- 3) Staff title (הרב / המורה / other) for the parent-message signature,
+--    required name + title when requesting a role, one homeroom class, and
+--    "already has a homeroom teacher" info for the sign-up class list.
+
+alter table public.profiles add column if not exists title text;
+
+do $$
+begin
+  alter table public.profiles add constraint profiles_title_len
+    check (title is null or char_length(title) <= 20);
+exception when duplicate_object then null;
+end $$;
+
+grant update (title) on public.profiles to authenticated;
+
+drop function if exists public.list_open_classes();
+create function public.list_open_classes()
+returns table (id uuid, name text, has_homeroom boolean)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select c.id, c.name, c.homeroom_teacher_id is not null
+  from public.classes c
+  where c.active
+    and public.caller_permitted()
+  order by c.name;
+$$;
+
+revoke all on function public.list_open_classes() from public, anon;
+grant execute on function public.list_open_classes() to authenticated;
+
+create or replace function public.request_staff_role(p_role text, p_class_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me public.profiles%rowtype;
+begin
+  if auth.uid() is null or not public.caller_permitted() then
+    raise exception 'אין הרשאה לבקש תפקיד';
+  end if;
+  select * into me from public.profiles p where p.id = auth.uid();
+  if me.role is not null then
+    raise exception 'כבר יש תפקיד לחשבון';
+  end if;
+  if p_role not in ('teacher', 'homeroom') then
+    raise exception 'אפשר לבקש רק מורה מקצועי או מחנך';
+  end if;
+  if cardinality(regexp_split_to_array(btrim(coalesce(me.full_name, '')), '\s+')) < 2
+     or btrim(coalesce(me.full_name, '')) = '' then
+    raise exception 'צריך למלא שם פרטי ושם משפחה';
+  end if;
+  if nullif(btrim(coalesce(me.title, '')), '') is null then
+    raise exception 'צריך לבחור תואר';
+  end if;
+  if p_role = 'homeroom' then
+    if p_class_ids is null or cardinality(p_class_ids) <> 1 then
+      raise exception 'מחנך בוחר כיתה אחת קיימת';
+    end if;
+    if not exists (select 1 from public.classes c where c.id = p_class_ids[1] and c.active) then
+      raise exception 'הכיתה לא נמצאה';
+    end if;
+  else
+    p_class_ids := '{}';
+  end if;
+  update public.profiles
+  set requested_role = p_role::public.user_role,
+      requested_class_ids = coalesce(p_class_ids, '{}')
+  where id = auth.uid();
+end;
+$$;
+
+revoke all on function public.request_staff_role(text, uuid[]) from public, anon;
+grant execute on function public.request_staff_role(text, uuid[]) to authenticated;

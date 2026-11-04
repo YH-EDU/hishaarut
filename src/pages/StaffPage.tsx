@@ -6,6 +6,8 @@ import { useAuth } from "../auth";
 import { EmptyState, PageHeader } from "../components/PageHeader";
 import { Sheet } from "../components/Sheet";
 import { Banner, Button, Field } from "../components/ui";
+import { TitlePicker } from "../components/TitlePicker";
+import { isFullName, titledName } from "../lib/staffName";
 
 const STAFF_ROLES: Array<Role | ""> = ["", "teacher", "homeroom", "secretary"];
 
@@ -53,6 +55,15 @@ export function StaffPage() {
     const draft = draftFor(profile);
     setError(null);
     try {
+      const target = classes.find((room) => room.id === draft.classId);
+      if (
+        draft.role === "homeroom" &&
+        target?.homeroomTeacherId &&
+        target.homeroomTeacherId !== profile.id &&
+        !window.confirm(`לכיתה ${target.name} כבר רשום מחנך. להחליף אותו?`)
+      ) {
+        return;
+      }
       await getApi().setUserRole(profile.id, draft.role || null);
       if (draft.role === "homeroom") {
         for (const room of classes) {
@@ -146,7 +157,7 @@ export function StaffPage() {
                 return (
                   <tr key={profile.id}>
                     <td>
-                      {profile.fullName || "—"}
+                      {profile.fullName ? titledName(profile) : "—"}
                       {profile.isOwner ? <span className="owner-badge">בעלים</span> : null}
                     </td>
                     <td className="ltr">{profile.email}</td>
@@ -239,6 +250,7 @@ export function StaffPage() {
                       </p>
                     ) : (
                       <>
+                        <NameEditor profile={profile} onSaved={load} onError={setError} onInfo={setInfo} />
                         <Field label="תפקיד">
                           <select
                             value={draft.role}
@@ -313,50 +325,9 @@ function ApprovalList({
   return (
     <section className="panel stack">
       <h2>בקשות לאישור · {requests.length}</h2>
-      {requests.map((profile) => {
-        const names = classes.filter((room) => profile.requestedClassIds.includes(room.id)).map((room) => room.name);
-        return (
-          <div key={profile.id} className="spread">
-            <span>
-              <b>{profile.fullName || profile.email}</b>
-              <span className="muted">
-                {" "}
-                {profile.requestedRole ? ROLE_LABEL[profile.requestedRole] : ""}
-                {names.length > 0 ? ` · ${names.join(", ")}` : ""}
-              </span>
-            </span>
-            <span className="row">
-              <Button
-                onClick={() =>
-                  void getApi()
-                    .approveStaffRequest(profile.id, profile.requestedRole as Role, profile.requestedClassIds)
-                    .then(async () => {
-                      onInfo("הבקשה אושרה");
-                      await onChanged();
-                    })
-                    .catch((err: unknown) => onError(err instanceof Error ? err.message : "האישור נכשל"))
-                }
-              >
-                אישור
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  void getApi()
-                    .rejectStaffRequest(profile.id)
-                    .then(async () => {
-                      onInfo("הבקשה נדחתה");
-                      await onChanged();
-                    })
-                    .catch((err: unknown) => onError(err instanceof Error ? err.message : "הדחייה נכשלה"))
-                }
-              >
-                דחייה
-              </Button>
-            </span>
-          </div>
-        );
-      })}
+      {requests.map((profile) => (
+        <ApprovalRow key={profile.id} profile={profile} classes={classes} onChanged={onChanged} onError={onError} onInfo={onInfo} />
+      ))}
     </section>
   );
 }
@@ -403,5 +374,128 @@ function OwnerTransfer({
         </Button>
       </div>
     </section>
+  );
+}
+
+function ApprovalRow({
+  profile,
+  classes,
+  onChanged,
+  onError,
+  onInfo,
+}: {
+  profile: Profile;
+  classes: ClassRoom[];
+  onChanged: () => Promise<void>;
+  onError: (message: string | null) => void;
+  onInfo: (message: string | null) => void;
+}) {
+  const homeroom = profile.requestedRole === "homeroom";
+  const [classId, setClassId] = useState(profile.requestedClassIds[0] ?? "");
+  const room = classes.find((item) => item.id === classId);
+  const claimed = classes.filter((item) => profile.requestedClassIds.includes(item.id)).map((item) => item.name);
+  const taken = room && room.homeroomTeacherId && room.homeroomTeacherId !== profile.id;
+  const missingName = !isFullName(profile.fullName);
+  return (
+    <div className="stack approval-row">
+      <div>
+        <b>{titledName(profile)}</b> <span className="ltr muted">{profile.email}</span>
+        <br />
+        <span>
+          מבקש: {profile.requestedRole ? ROLE_LABEL[profile.requestedRole] : ""}
+          {homeroom ? <> · כיתה שנבחרה: <b>{claimed.join(", ") || "לא נבחרה"}</b></> : null}
+        </span>
+      </div>
+      {missingName || !profile.title ? (
+        <Banner tone="warn">חסר {missingName ? "שם פרטי ומשפחה" : "תואר"}. אפשר להשלים בכרטיס איש הצוות אחרי האישור.</Banner>
+      ) : null}
+      {homeroom ? (
+        <Field label="כיתת חינוך לאישור">
+          <select value={classId} onChange={(event) => setClassId(event.target.value)}>
+            <option value="">בחרו כיתה</option>
+            {classes.filter((item) => item.active).map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+                {item.homeroomTeacherId && item.homeroomTeacherId !== profile.id ? " (יש מחנך)" : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      {taken ? <Banner tone="warn">לכיתה {room?.name} כבר רשום מחנך. אישור יחליף אותו במחנך החדש.</Banner> : null}
+      <span className="row">
+        <Button
+          disabled={homeroom && !classId}
+          onClick={() =>
+            void getApi()
+              .approveStaffRequest(profile.id, profile.requestedRole as Role, homeroom ? [classId] : [])
+              .then(async () => {
+                onInfo("הבקשה אושרה");
+                await onChanged();
+              })
+              .catch((err: unknown) => onError(err instanceof Error ? err.message : "האישור נכשל"))
+          }
+        >
+          אישור
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() =>
+            void getApi()
+              .rejectStaffRequest(profile.id)
+              .then(async () => {
+                onInfo("הבקשה נדחתה");
+                await onChanged();
+              })
+              .catch((err: unknown) => onError(err instanceof Error ? err.message : "הדחייה נכשלה"))
+          }
+        >
+          דחייה
+        </Button>
+      </span>
+    </div>
+  );
+}
+
+function NameEditor({
+  profile,
+  onSaved,
+  onError,
+  onInfo,
+}: {
+  profile: Profile;
+  onSaved: () => Promise<void>;
+  onError: (message: string | null) => void;
+  onInfo: (message: string | null) => void;
+}) {
+  const [fullName, setFullName] = useState(profile.fullName);
+  const [title, setTitle] = useState(profile.title ?? "");
+  const dirty = fullName.trim() !== profile.fullName.trim() || title.trim() !== (profile.title ?? "").trim();
+  return (
+    <div className="stack">
+      <Field label="תואר">
+        <TitlePicker value={title} onChange={setTitle} />
+      </Field>
+      <Field label="שם פרטי ומשפחה">
+        <input value={fullName} maxLength={120} onChange={(event) => setFullName(event.target.value)} />
+      </Field>
+      {dirty ? (
+        <Button
+          variant="ghost"
+          disabled={!isFullName(fullName) || !title.trim()}
+          onClick={() =>
+            void getApi()
+              .updateStaffProfile(profile.id, { fullName: fullName.trim(), title: title.trim() })
+              .then(async () => {
+                onInfo("הפרטים נשמרו");
+                await onSaved();
+              })
+              .catch((err: unknown) => onError(err instanceof Error ? err.message : "השמירה נכשלה"))
+          }
+        >
+          שמירת שם ותואר
+        </Button>
+      ) : null}
+    </div>
   );
 }

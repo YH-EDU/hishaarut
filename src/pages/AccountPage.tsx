@@ -4,11 +4,14 @@ import { ROLE_LABEL } from "../api/types";
 import { useAuth } from "../auth";
 import { Banner, Button, Field } from "../components/ui";
 import { normalizeIlPhone } from "../lib/phone";
+import { TitlePicker } from "../components/TitlePicker";
+import { isFullName } from "../lib/staffName";
 
 export function AccountPage() {
   const { session, refresh, signOut } = useAuth();
   const profile = session?.profile;
   const [fullName, setFullName] = useState(profile?.fullName ?? "");
+  const [title, setTitle] = useState(profile?.title ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -18,7 +21,7 @@ export function AccountPage() {
     setBusy(true);
     setError(null);
     try {
-      await getApi().updateOwnProfile({ fullName, phone });
+      await getApi().updateOwnProfile({ fullName: fullName.trim(), phone, title: title.trim() || null });
       await refresh();
       setInfo("הפרטים נשמרו");
     } catch (err) {
@@ -39,7 +42,11 @@ export function AccountPage() {
       <p>{profile.role ? ROLE_LABEL[profile.role] : "ממתין לאישור"}</p>
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {info ? <Banner>{info}</Banner> : null}
-      <Field label="שם מלא">
+      {!profile.title ? <Banner tone="warn">חסר תואר. בחרו איך לפנות אליכם, וזה יופיע בחתימה בהודעות להורים.</Banner> : null}
+      <Field label="תואר (מופיע בחתימה להורים)">
+        <TitlePicker value={title} onChange={setTitle} />
+      </Field>
+      <Field label="שם פרטי ומשפחה">
         <input value={fullName} onChange={(event) => setFullName(event.target.value)} />
       </Field>
       <Field label="טלפון נייד לקבלת הודעות">
@@ -47,7 +54,7 @@ export function AccountPage() {
       </Field>
       {phone && !normalizeIlPhone(phone) ? <Banner tone="warn">המספר לא נראה ישראלי.</Banner> : null}
       <p className="muted">המזכירות שולחת למחנך/ת הודעת וואטסאפ למספר הזה כשתלמיד מהכיתה נשאר.</p>
-      <Button disabled={busy || !fullName.trim()} onClick={() => void save()}>
+      <Button disabled={busy || !isFullName(fullName) || !title.trim()} onClick={() => void save()}>
         שמירה
       </Button>
       <Button variant="ghost" onClick={() => void signOut()}>

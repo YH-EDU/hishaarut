@@ -4,6 +4,7 @@ import { getApi } from "../api";
 import type { Detention } from "../api/types";
 import { useAuth } from "../auth";
 import { PageHeader } from "../components/PageHeader";
+import { signatureName } from "../lib/staffName";
 import { ParentWhatsApp } from "../components/ParentWhatsApp";
 import { Banner, Button, Empty, Ltr, StatusPill, studentName } from "../components/ui";
 import { formatTime, jerusalemToday } from "../lib/dates";
@@ -62,7 +63,7 @@ export function MyMarksPage() {
               className={row.className}
               releaseTime={formatTime(row.releaseAt)}
               reason={row.reasonText}
-              teacherName={session?.profile.fullName ?? row.markerName}
+              teacherName={signatureName(session?.profile) || row.markerName}
             />
           ) : null}
           {row.status === "pending" ? (

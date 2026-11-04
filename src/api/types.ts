@@ -10,6 +10,8 @@ export interface Profile {
   id: string;
   email: string;
   fullName: string;
+  /** הרב / המורה / free text. Null for users who signed up before titles existed. */
+  title?: string | null;
   phone: string | null;
   role: Role | null;
   requestedRole: Role | null;
@@ -203,7 +205,8 @@ export interface AppApi {
   signInAs?(role: Role | "pending" | "new"): Promise<void>;
   signOut(): Promise<void>;
   getAccessToken(): Promise<string | null>;
-  updateOwnProfile(patch: { fullName: string; phone: string }): Promise<void>;
+  updateOwnProfile(patch: { fullName: string; phone: string; title?: string | null }): Promise<void>;
+  updateStaffProfile(userId: string, patch: { fullName: string; title: string | null }): Promise<void>;
   getSettings(): Promise<SchoolSettings>;
   updateSettings(patch: SchoolSettings): Promise<void>;
   updateSchedule(schedule: WeekSchedule): Promise<void>;
@@ -229,7 +232,7 @@ export interface AppApi {
   saveReason(input: ReasonInput): Promise<void>;
   listProfiles(): Promise<Profile[]>;
   setUserRole(userId: string, role: Role | null): Promise<void>;
-  listOpenClasses(): Promise<Array<{ id: string; name: string }>>;
+  listOpenClasses(): Promise<Array<{ id: string; name: string; hasHomeroom?: boolean }>>;
   requestStaffRole(role: "teacher" | "homeroom", classIds: string[]): Promise<void>;
   approveStaffRequest(userId: string, role: Role, classIds: string[]): Promise<void>;
   rejectStaffRequest(userId: string): Promise<void>;
