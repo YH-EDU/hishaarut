@@ -65,7 +65,7 @@ export type DayKey = (typeof DAY_KEYS)[number];
 export const DEFAULT_WEEK: WeekSchedule = {
   sun: { start: "07:00", end: "16:00" },
   mon: { start: "07:00", end: "16:00" },
-  tue: { start: "07:00", end: "14:00" },
+  tue: { start: "07:00", end: "14:30" },
   wed: { start: "07:00", end: "16:00" },
   thu: { start: "07:00", end: "16:00" },
   fri: { start: "07:00", end: "12:00" },

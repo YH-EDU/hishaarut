@@ -543,7 +543,11 @@ function ReleaseTableRow({
 }
 
 function TimeChip({ waiting, releaseAt }: { waiting: string | null; releaseAt: string }) {
-  return <span className={waiting ? "time-chip" : "time-chip ready"}>{waiting ?? <Ltr>{formatTime(releaseAt)}</Ltr>}</span>;
+  return (
+    <span className={waiting ? "time-chip" : "time-chip ready"}>
+      <Ltr>{formatTime(releaseAt)}</Ltr>
+    </span>
+  );
 }
 
 function WaLink({ href }: { href: string }) {
