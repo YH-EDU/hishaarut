@@ -1227,7 +1227,7 @@ select set_config('request.jwt.claim.sub', '', false);
 update public.school_settings set
   start_sun = '07:00', end_sun = '16:00',
   start_mon = '07:00', end_mon = '16:00',
-  start_tue = '07:00', end_tue = '14:00',
+  start_tue = '07:00', end_tue = '14:30',
   start_wed = '07:00', end_wed = '16:00',
   start_thu = '07:00', end_thu = '16:00',
   start_fri = '07:00', end_fri = '12:00',
@@ -1244,11 +1244,11 @@ declare
   long_one text;
 begin
   shown := to_char(timezone('Asia/Jerusalem', public.default_release_at(tuesday, 30)), 'YYYY-MM-DD HH24:MI');
-  if shown <> '2026-11-03 14:30' then
-    raise exception 'tuesday release should be 14:30, got %', shown;
+  if shown <> '2026-11-03 15:00' then
+    raise exception 'tuesday release should be 15:00, got %', shown;
   end if;
   long_one := to_char(timezone('Asia/Jerusalem', public.default_release_at(tuesday, 240)), 'HH24:MI');
-  if long_one <> '17:00' then
+  if long_one <> '17:30' then
     raise exception 'release should cap three hours after the bell, got %', long_one;
   end if;
   begin
@@ -1256,7 +1256,7 @@ begin
     raise exception 'before the school day should be refused';
   exception
     when others then
-      if sqlerrm not like '%סימון השארות פתוח בימי לימודים בין 07:00 ל-14:00%' then
+      if sqlerrm not like '%סימון השארות פתוח בימי לימודים בין 07:00 ל-14:30%' then
         raise;
       end if;
   end;
@@ -1265,7 +1265,7 @@ begin
     raise exception 'after the bell should be refused';
   exception
     when others then
-      if sqlerrm not like '%בין 07:00 ל-14:00%' then
+      if sqlerrm not like '%בין 07:00 ל-14:30%' then
         raise;
       end if;
   end;
@@ -1287,7 +1287,7 @@ begin
   raise exception 'a holiday should refuse a mark';
 exception
   when others then
-    if sqlerrm not like '%בין 07:00 ל-14:00%' then
+    if sqlerrm not like '%בין 07:00 ל-14:30%' then
       raise;
     end if;
 end $$;

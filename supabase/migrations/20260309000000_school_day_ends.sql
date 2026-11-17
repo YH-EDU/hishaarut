@@ -1,11 +1,11 @@
 -- Weekly school end times. A detention starts when the school day ends.
--- Sunday, Monday, Wednesday, Thursday 16:00. Tuesday 14:00. Friday 12:00.
+-- Sunday, Monday, Wednesday, Thursday 16:00. Tuesday 14:30. Friday 12:00.
 -- Saturday is off unless an admin or secretary sets a time.
 -- Times are Asia/Jerusalem. Safe to paste again.
 
 alter table public.school_settings add column if not exists end_sun time not null default '16:00';
 alter table public.school_settings add column if not exists end_mon time not null default '16:00';
-alter table public.school_settings add column if not exists end_tue time not null default '14:00';
+alter table public.school_settings add column if not exists end_tue time not null default '14:30';
 alter table public.school_settings add column if not exists end_wed time not null default '16:00';
 alter table public.school_settings add column if not exists end_thu time not null default '16:00';
 alter table public.school_settings add column if not exists end_fri time not null default '12:00';
